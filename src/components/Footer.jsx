@@ -1,4 +1,4 @@
-import { FaGithub, FaLinkedin } from "react-icons/fa";
+import { FaGithub, FaLinkedin, FaYoutube } from "react-icons/fa";
 
 function Footer() {
   return (
@@ -7,9 +7,19 @@ function Footer() {
         <p>© {new Date().getFullYear()} House Bajaj - Valar Morghulis, Code Endures</p>
         <div className="flex items-center gap-4">
           <a
+            href="https://youtube.com/shorts/jX8gRQwBRoM?si=p8qPG7VvSyc3jYxx"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="YouTube Channel"
+            className="rounded-full border border-brand-700/70 p-2 transition duration-300 hover:-translate-y-0.5 hover:border-red-500 hover:text-red-400 dark:border-brand-700/70"
+          >
+            <FaYoutube size={18} />
+          </a>
+          <a
             href="https://www.linkedin.com/in/sarthak-jain-bajaj-2550a63a2"
             target="_blank"
             rel="noreferrer"
+            aria-label="LinkedIn Profile"
             className="rounded-full border border-brand-700/70 p-2 transition duration-300 hover:-translate-y-0.5 hover:border-gold-500 hover:text-gold-400 dark:border-brand-700/70"
           >
             <FaLinkedin size={18} />
@@ -18,6 +28,7 @@ function Footer() {
             href="https://github.com/sarthakjainbajaj-hash"
             target="_blank"
             rel="noreferrer"
+            aria-label="GitHub Profile"
             className="rounded-full border border-brand-700/70 p-2 transition duration-300 hover:-translate-y-0.5 hover:border-gold-500 hover:text-gold-400 dark:border-brand-700/70"
           >
             <FaGithub size={18} />

@@ -360,7 +360,7 @@ export class RageRoomEngine {
     // Neon Wall Posters with Sarthak's Real Portfolio Branding
     this.createPoster("🚀 SOLVESPHERE AI 🚀", "SIH-26043 • CROWDSOURCING INNOVATION", 0, 3.2, -roomD / 2 + 0.05, 0, "#06b6d4");
     this.createPoster("⚡ TECH ARSENAL ⚡", "REACT • PYTHON • NODE.JS • THREE.JS", -roomW / 2 + 0.05, 3.2, 0, Math.PI / 2, "#f43f5e");
-    this.createPoster("🛠️ SARTHAK JAIN BAJAJ 🛠️", "AI & FULL-STACK SOFTWARE ENGINEER", roomW / 2 - 0.05, 3.2, 0, -Math.PI / 2, "#eab308");
+    this.createPoster("🎬 AI VIDEO CREATOR 🎬", "YOUTUBE SHORTS • AI VISUAL STORYTELLING", roomW / 2 - 0.05, 3.2, 0, -Math.PI / 2, "#ef4444");
     this.createPoster("🥊 RAGE ROOM ARCADE 🥊", "SMASH STRESS • FORGED BY SARTHAK", 0, 3.2, roomD / 2 - 0.05, Math.PI, "#a855f7");
 
     // Lighting

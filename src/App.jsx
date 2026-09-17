@@ -9,6 +9,7 @@ import Navbar from "./components/Navbar";
 import Projects from "./components/Projects";
 import Resume from "./components/Resume";
 import Skills from "./components/Skills";
+import AiVideoShowcase from "./components/AiVideoShowcase";
 import ThreeBackground from "./components/ThreeBackground";
 import ThreeGameView from "./components/Game3D/ThreeGameView";
 import RageRoomView from "./components/RageRoom3D/RageRoomView";
@@ -230,6 +231,7 @@ function App() {
         <About />
         <Experience />
         <Projects />
+        <AiVideoShowcase />
         <Skills />
         <Certifications />
         <Resume />

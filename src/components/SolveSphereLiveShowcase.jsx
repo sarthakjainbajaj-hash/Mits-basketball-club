@@ -251,12 +251,12 @@ function SolveSphereLiveShowcase() {
               <p className="text-[11px] text-slate-400 mt-1">Hackathon Project</p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-              <div className="text-2xl font-black text-brand-400 font-heading">&lt; 85ms</div>
-              <p className="text-[11px] text-slate-400 mt-1">Client Route Transition</p>
+              <div className="text-2xl font-black text-brand-400 font-heading">React 18</div>
+              <p className="text-[11px] text-slate-400 mt-1">Modern UI & Vite</p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-              <div className="text-2xl font-black text-cyan-400 font-heading">100%</div>
-              <p className="text-[11px] text-slate-400 mt-1">Live Deployment Uptime</p>
+              <div className="text-2xl font-black text-cyan-400 font-heading">Vercel</div>
+              <p className="text-[11px] text-slate-400 mt-1">Live Cloud Deployment</p>
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
               <div className="text-2xl font-black text-emerald-400 font-heading">Multi-Tier</div>

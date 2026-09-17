@@ -6,11 +6,11 @@ function Experience() {
       period: "2026 • Internship",
       icon: "💼",
       bullets: [
-        "Engineered 12+ modular, responsive web interface components in React.js and Tailwind CSS, elevating Google Lighthouse performance to 95+.",
-        "Integrated RESTful API endpoints and optimized client-side caching, reducing initial page render latency by 35%.",
-        "Collaborated across design and engineering teams following agile code reviews, Git branching workflows, and automated CI/CD checks.",
+        "Architected and developed modular, responsive web interface components in React.js and Tailwind CSS.",
+        "Integrated RESTful API endpoints and optimized frontend rendering for smooth, accessible user experiences.",
+        "Collaborated with the engineering team adhering to Git version control, agile workflows, and code reviews.",
       ],
-      skills: ["React.js", "JavaScript", "Tailwind CSS", "REST APIs", "Git", "Lighthouse 95+"],
+      skills: ["React.js", "JavaScript", "Tailwind CSS", "REST APIs", "Git", "Web Development"],
     },
   ];
 

@@ -8,10 +8,10 @@ function About() {
         <div className="mt-6 grid gap-6 md:grid-cols-[1.2fr_0.8fr] items-center">
           <div>
             <p className="text-base sm:text-lg leading-relaxed text-slate-700 dark:text-slate-200">
-              I am an <strong>AI & Full-Stack Software Engineer</strong> pursuing B.Tech in Artificial Intelligence & Data Science at MITS with a specialized Data Science diploma from <strong>IIT Roorkee</strong>. Creator of <strong>SolveSphere</strong> for the <strong>Smart India Hackathon (SIH-26043)</strong>.
+              I am an <strong>AI & Full-Stack Software Engineer</strong> and <strong>AI Video Content Creator</strong> pursuing B.Tech in Artificial Intelligence & Data Science at MITS with a specialized Data Science diploma from <strong>IIT Roorkee</strong>. Creator of <strong>SolveSphere</strong> for the <strong>Smart India Hackathon (SIH-26043)</strong>.
             </p>
             <p className="mt-4 text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">
-              My engineering focus centers on bridging intelligent AI pipelines (RAG, LLM orchestration, semantic vector retrieval) with high-performance web applications and real-time WebGL graphics. Having completed a software engineering internship at <strong>Yuga Yatra</strong>, I bring production-tested discipline, clean architecture habits, and a commitment to high-impact user experiences.
+              My work spans scalable web architectures, creative generative AI video production, and interactive real-time WebGL 3D graphics. Having completed a software engineering internship at <strong>Yuga Yatra</strong>, I combine technical discipline with creative storytelling to build engaging, production-ready digital experiences.
             </p>
           </div>
 
@@ -28,9 +28,9 @@ function About() {
               <div className="text-2xl font-black text-emerald-400 font-heading">Yuga Yatra</div>
               <p className="text-xs text-slate-400 mt-1 font-bold">SWE Internship</p>
             </div>
-            <div className="rounded-2xl border border-purple-500/40 bg-slate-900/60 p-4 text-center">
-              <div className="text-2xl font-black text-purple-400 font-heading">60 FPS</div>
-              <p className="text-xs text-slate-400 mt-1 font-bold">Custom 3D WebGL</p>
+            <div className="rounded-2xl border border-red-500/40 bg-slate-900/60 p-4 text-center">
+              <div className="text-2xl font-black text-red-400 font-heading">AI Video</div>
+              <p className="text-xs text-slate-400 mt-1 font-bold">Content Creator</p>
             </div>
           </div>
         </div>

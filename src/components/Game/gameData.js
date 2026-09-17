@@ -324,6 +324,7 @@ export const INTERACTABLES = [
         { type: "phone", label: "+91-9131255449", url: "tel:+919131255449", icon: "📞" },
         { type: "linkedin", label: "LinkedIn Profile", url: "https://linkedin.com/in/sarthak-jain-bajaj-2550a63a2", icon: "💼" },
         { type: "github", label: "GitHub Profile", url: "https://github.com/sarthakjainbajaj-hash", icon: "🐙" },
+        { type: "youtube", label: "YouTube (AI Video Channel)", url: "https://youtube.com/shorts/jX8gRQwBRoM?si=p8qPG7VvSyc3jYxx", icon: "🎬" },
         { type: "portfolio", label: "portfolio-4vp2.vercel.app", url: "https://portfolio-4vp2.vercel.app/", icon: "🌐" },
       ],
       resumeUrl: "/resume.html",

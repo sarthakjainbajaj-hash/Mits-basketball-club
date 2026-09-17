@@ -24,23 +24,29 @@ function Hero({ houseTheme = "stark", onPlayGame }) {
               Sarthak Jain Bajaj
             </h1>
             <h2 className="mt-4 text-xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-gold-300 via-amber-200 to-brand-300 font-heading">
-              AI & Full-Stack Software Engineer
+              AI & Full-Stack Engineer • AI Video Creator
             </h2>
             <p className="mt-5 max-w-2xl text-sm sm:text-base leading-relaxed text-slate-300">
-              Creator of SolveSphere for <span className="text-gold-300 font-bold">Smart India Hackathon (SIH-26043)</span> and B.Tech AI & Data Science scholar at MITS. Building scalable full-stack web platforms, retrieval-augmented AI systems, and real-time WebGL graphics engines.
+              Creator of SolveSphere for <span className="text-gold-300 font-bold">Smart India Hackathon (SIH-26043)</span>, AI video content creator, and B.Tech AI & Data Science student at MITS. Building scalable full-stack web platforms, generative media, and interactive real-time 3D experiences.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a
                 href="#projects"
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-gold-600 px-6 py-3 text-xs sm:text-sm font-black text-white shadow-premium transition duration-200 hover:scale-105"
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-gold-600 px-5 py-3 text-xs sm:text-sm font-black text-white shadow-premium transition duration-200 hover:scale-105"
               >
-                <span>🚀</span> Explore Flagship SolveSphere
+                <span>🚀</span> Explore SolveSphere
+              </a>
+              <a
+                href="#aivideo"
+                className="flex items-center gap-2 rounded-xl border border-red-500/60 bg-red-950/40 px-5 py-3 text-xs sm:text-sm font-bold text-red-300 shadow transition duration-200 hover:border-red-400 hover:bg-red-900/60 hover:text-white"
+              >
+                <span>🎬</span> Watch AI Videos
               </a>
               <button
                 type="button"
                 onClick={onPlayGame}
-                className="flex items-center gap-2 rounded-xl border border-gold-500/60 bg-slate-900/90 px-6 py-3 text-xs sm:text-sm font-bold text-gold-300 shadow transition duration-200 hover:border-gold-400 hover:text-white"
+                className="flex items-center gap-2 rounded-xl border border-gold-500/60 bg-slate-900/90 px-5 py-3 text-xs sm:text-sm font-bold text-gold-300 shadow transition duration-200 hover:border-gold-400 hover:text-white"
               >
                 <span>🎮</span> Play 3D Citadel Realm
               </button>
@@ -48,9 +54,9 @@ function Hero({ houseTheme = "stark", onPlayGame }) {
                 href="/resume.html"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-5 py-3 text-xs sm:text-sm font-bold text-slate-300 hover:border-slate-500 hover:text-white transition"
+                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-xs sm:text-sm font-bold text-slate-300 hover:border-slate-500 hover:text-white transition"
               >
-                <span>📄</span> Open Resume PDF
+                <span>📄</span> Resume PDF
               </a>
             </div>
           </div>

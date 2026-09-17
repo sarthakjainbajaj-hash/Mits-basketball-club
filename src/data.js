@@ -3,11 +3,28 @@ export const navLinks = [
   { id: "about", label: "About" },
   { id: "experience", label: "Experience" },
   { id: "projects", label: "Projects" },
+  { id: "aivideo", label: "AI Videos" },
   { id: "skills", label: "Skills" },
   { id: "certifications", label: "Certifications" },
   { id: "resume", label: "Resume" },
   { id: "contact", label: "Contact" },
 ];
+
+export const aiVideo = {
+  title: "AI Video Creation & Visual Storytelling",
+  subtitle: "Generative AI Video Production • Prompt Engineering • Digital Content Creation",
+  youtubeUrl: "https://youtube.com/shorts/jX8gRQwBRoM?si=p8qPG7VvSyc3jYxx",
+  videoId: "jX8gRQwBRoM",
+  embedUrl: "https://www.youtube.com/embed/jX8gRQwBRoM",
+  description:
+    "As an AI Video Content Creator, I engineer cinematic visual stories, dynamic shorts, and creative media by leveraging generative AI video models, neural synthesis, and post-production workflows.",
+  highlights: [
+    "Generative AI Video & Prompt Engineering",
+    "Cinematic Storyboarding & Scene Pacing",
+    "Audio & Visual Synchronization",
+    "YouTube Content Strategy & Production",
+  ],
+};
 
 export const projects = [
   {
@@ -15,43 +32,43 @@ export const projects = [
     tag: "💡 Smart India Hackathon Project",
     category: "AI & Crowdsourced Innovation",
     description:
-      "AI-powered collaborative platform crowdsourcing societal challenges and facilitating solution co-creation across academic institutions, student researchers, and industry leaders. Engineered for the Smart India Hackathon (SIH-26043).",
-    metrics: "100+ Crowdsourced Challenges • Smart India Hackathon SIH-26043 • Live Production on Vercel",
-    techStack: ["React.js", "Tailwind CSS", "Vite", "AI Integration", "FastAPI", "MongoDB"],
+      "AI-powered collaborative platform crowdsourcing societal challenges and facilitating collaborative problem-solving across universities, students, and industry partnerships (SIH-26043).",
+    metrics: "Smart India Hackathon SIH-26043 • Live Production on Vercel",
+    techStack: ["React.js", "Tailwind CSS", "Vite", "AI Integration"],
     liveUrl: "https://solvesphere-three.vercel.app/",
     githubUrl: "https://github.com/sarthakjainbajaj-hash/SolveSphere-SIH26043",
   },
   {
-    title: "NeuralInsight AI",
-    tag: "⚡ GenAI & RAG Architecture",
-    category: "Artificial Intelligence & NLP",
+    title: "Parking Lot Management System",
+    tag: "🚗 Automated Management",
+    category: "Full-Stack Web Application",
     description:
-      "Production-ready Retrieval-Augmented Generation (RAG) platform enabling semantic document search, contextual QA, automated chunking, and vector embedding retrieval over complex technical datasets.",
-    metrics: "Sub-120ms Vector Retrieval • Multi-document PDF/DOCX Parsing • Contextual Hallucination Guardrails",
-    techStack: ["Python", "FastAPI", "LangChain", "Vector Embeddings", "React.js", "Tailwind CSS"],
-    liveUrl: "https://github.com/sarthakjainbajaj-hash/neural-insight-ai",
-    githubUrl: "https://github.com/sarthakjainbajaj-hash/neural-insight-ai",
+      "Automated parking slot management system with a scalable cloud-ready deployment approach. Monitors real-time occupancy and simplifies parking allocation.",
+    metrics: "Cloud Deployed • Automated Slot Management",
+    techStack: ["React", "Flask", "Python"],
+    liveUrl: "",
+    githubUrl: "",
   },
   {
-    title: "TradePulse Analytics",
-    tag: "📊 Quantitative Fintech Engine",
-    category: "Data Science & Financial Modeling",
+    title: "Student Report Card Generator",
+    tag: "📑 Academic Platform",
+    category: "Educational Management",
     description:
-      "Quantitative equity screening and IPO volatility analytics engine. Preprocesses market time-series, surfaces alpha trends, and renders interactive financial risk dashboards.",
-    metrics: "15,000+ Financial Records Analyzed • 40% Reporting Latency Cut • Automated EDA Pipelines",
-    techStack: ["Python", "Pandas", "NumPy", "Flask", "React.js", "Chart.js", "SQL"],
-    liveUrl: "https://github.com/sarthakjainbajaj-hash/tradepulse-analytics",
-    githubUrl: "https://github.com/sarthakjainbajaj-hash/tradepulse-analytics",
+      "Built a report card generator to dynamically generate, calculate grade evaluations, and store student records for future access.",
+    metrics: "Automated Grade Calculation • Database Archiving",
+    techStack: ["React", "Node.js", "MongoDB", "Express.js"],
+    liveUrl: "",
+    githubUrl: "",
   },
   {
-    title: "Citadel & Rage Room 3D WebGL Engine",
-    tag: "⚙️ Custom Graphics Architecture",
+    title: "Citadel & Rage Room 3D WebGL Games",
+    tag: "⚙️ 3D Graphics & Games",
     category: "Computer Graphics & WebGL",
     description:
-      "High-performance browser-based 3D engine engineered from scratch without Unity or Unreal. Implements spherical orbit physics, raycast melee hit detection, 2,200 celestial stars, and procedural Web Audio API sound synthesis maintaining steady 60 FPS.",
-    metrics: "Steady 60 FPS on WebGL • 0 External Audio File Bloat • 260x260 Interactive 3D World",
+      "High-performance browser-based 3D games and interactive portfolio built from scratch with Three.js. Includes Citadel 3D RPG with combat and Rage Room 3D stress-relief arcade with fleeing dummy AI and procedural Web Audio synthesis.",
+    metrics: "Steady 60 FPS • Custom Physics & Audio Synthesis • Zero Engine Bloat",
     techStack: ["Three.js", "WebGL", "Web Audio API", "React.js", "Tailwind CSS", "Vite"],
-    liveUrl: "https://github.com/sarthakjainbajaj-hash/portfolio",
+    liveUrl: "",
     githubUrl: "https://github.com/sarthakjainbajaj-hash/portfolio",
   },
 ];
