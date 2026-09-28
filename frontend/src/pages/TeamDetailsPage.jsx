@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { teamApi } from '../api/teamApi';
+import { playerApi } from '../api/playerApi';
 import {
   Shield,
   Users,
@@ -10,14 +12,26 @@ import {
   Sparkles,
   ExternalLink,
   Flame,
+  Plus,
+  Trash2,
+  X,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
 const TeamDetailsPage = () => {
   const { id } = useParams();
+  const { isAdmin } = useAuth();
   const [team, setTeam] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+
+  // Quick Add Player Modal State
+  const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
+  const [newPlayerData, setNewPlayerData] = useState({
+    name: '',
+    jerseyNumber: '',
+    position: 'Guard',
+  });
 
   useEffect(() => {
     fetchTeamDetails();
@@ -32,6 +46,55 @@ const TeamDetailsPage = () => {
       setToast({ message: 'Failed to load team details: ' + err.message, type: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openAddPlayerModal = () => {
+    const existingJerseys = (team?.players || []).map((p) => p.jerseyNumber);
+    let nextJersey = 0;
+    while (existingJerseys.includes(nextJersey) && nextJersey <= 99) {
+      nextJersey++;
+    }
+    setNewPlayerData({
+      name: '',
+      jerseyNumber: nextJersey,
+      position: 'Guard',
+    });
+    setIsAddPlayerModalOpen(true);
+  };
+
+  const handleCreatePlayer = async (e) => {
+    e.preventDefault();
+    if (!newPlayerData.name.trim()) return;
+
+    try {
+      await playerApi.create({
+        name: newPlayerData.name.trim(),
+        jerseyNumber: parseInt(newPlayerData.jerseyNumber, 10) || 0,
+        position: newPlayerData.position,
+        teamId: id,
+      });
+      setToast({
+        message: `Player "${newPlayerData.name}" successfully added to roster!`,
+        type: 'success',
+      });
+      setIsAddPlayerModalOpen(false);
+      fetchTeamDetails();
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to add player', type: 'error' });
+    }
+  };
+
+  const handleDeletePlayer = async (playerId, playerName) => {
+    if (!window.confirm(`Are you sure you want to remove player "${playerName}" from the team?`)) {
+      return;
+    }
+    try {
+      await playerApi.delete(playerId);
+      setToast({ message: `Player "${playerName}" removed from roster`, type: 'success' });
+      fetchTeamDetails();
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to remove player', type: 'error' });
     }
   };
 
@@ -196,9 +259,19 @@ const TeamDetailsPage = () => {
               <Users className="w-5 h-5 text-orange-400" />
               <h2 className="font-bold text-white text-base">Registered Player Roster</h2>
             </div>
-            <span className="text-xs font-mono text-slate-400">
-              {team.players?.length || 0} Registered
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-slate-400">
+                {team.players?.length || 0} Registered
+              </span>
+              {isAdmin && (
+                <button
+                  onClick={openAddPlayerModal}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shadow-md transition-all active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Player
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
@@ -220,11 +293,23 @@ const TeamDetailsPage = () => {
                     </div>
                   </div>
 
-                  <div className="text-right font-mono text-xs">
-                    <span className="text-orange-400 font-bold font-digital text-base">
-                      {p.stats?.points || 0}
-                    </span>
-                    <span className="text-slate-500 ml-1">PTS</span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right font-mono text-xs">
+                      <span className="text-orange-400 font-bold font-digital text-base">
+                        {p.stats?.points || 0}
+                      </span>
+                      <span className="text-slate-500 ml-1">PTS</span>
+                    </div>
+
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDeletePlayer(p._id, p.name)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/40 transition-colors"
+                        title="Remove Player"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
@@ -286,6 +371,96 @@ const TeamDetailsPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Add Player to Team Modal */}
+      {isAddPlayerModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                <Users className="w-5 h-5 text-orange-400" />
+                Add Player to {team.name}
+              </h3>
+              <button
+                onClick={() => setIsAddPlayerModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePlayer} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                  Player Full Name *
+                </label>
+                <input
+                  type="text"
+                  value={newPlayerData.name}
+                  onChange={(e) => setNewPlayerData({ ...newPlayerData, name: e.target.value })}
+                  placeholder="e.g. Aman Verma"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                    Jersey Number (0-99) *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="99"
+                    value={newPlayerData.jerseyNumber}
+                    onChange={(e) =>
+                      setNewPlayerData({ ...newPlayerData, jerseyNumber: e.target.value })
+                    }
+                    placeholder="7"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-amber-400 font-digital font-bold text-sm focus:border-orange-500 outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                    Position
+                  </label>
+                  <select
+                    value={newPlayerData.position}
+                    onChange={(e) =>
+                      setNewPlayerData({ ...newPlayerData, position: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
+                  >
+                    <option value="Guard">Guard</option>
+                    <option value="Forward">Forward</option>
+                    <option value="Center">Center</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPlayerModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-600/30 transition-all"
+                >
+                  Add Player
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>

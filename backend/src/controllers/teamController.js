@@ -58,12 +58,12 @@ const getTeamById = async (req, res) => {
   }
 };
 
-// @desc    Create new team
+// @desc    Create new team (with optional initial players)
 // @route   POST /api/teams
 // @access  Private/Admin
 const createTeam = async (req, res) => {
   try {
-    const { name, shortName, logo, primaryColor, secondaryColor, coach } = req.body;
+    const { name, shortName, logo, primaryColor, secondaryColor, coach, players } = req.body;
 
     if (!name || !shortName) {
       return res.status(400).json({
@@ -81,15 +81,46 @@ const createTeam = async (req, res) => {
     }
 
     const team = await Team.create({
-      name,
-      shortName: shortName.toUpperCase(),
+      name: name.trim(),
+      shortName: shortName.toUpperCase().trim(),
       logo: logo || '',
       primaryColor: primaryColor || '#FF5722',
       secondaryColor: secondaryColor || '#1E293B',
       coach: coach || '',
     });
 
-    res.status(201).json({ success: true, data: team });
+    // If players list provided, create players linked to this team
+    if (Array.isArray(players) && players.length > 0) {
+      const createdPlayerIds = [];
+      const usedJerseys = new Set();
+
+      for (let i = 0; i < players.length; i++) {
+        const p = players[i];
+        if (!p || !p.name || !p.name.trim()) continue;
+
+        let jNum = parseInt(p.jerseyNumber, 10);
+        if (isNaN(jNum) || jNum < 0 || jNum > 99 || usedJerseys.has(jNum)) {
+          jNum = 0;
+          while (usedJerseys.has(jNum) && jNum <= 99) jNum++;
+        }
+        usedJerseys.add(jNum);
+
+        const newPlayer = await Player.create({
+          name: p.name.trim(),
+          jerseyNumber: jNum,
+          position: ['Guard', 'Forward', 'Center'].includes(p.position) ? p.position : 'Guard',
+          teamId: team._id,
+          profileImage: p.profileImage || '',
+        });
+        createdPlayerIds.push(newPlayer._id);
+      }
+
+      team.players = createdPlayerIds;
+      await team.save();
+    }
+
+    const populatedTeam = await Team.findById(team._id).populate('players');
+    res.status(201).json({ success: true, data: populatedTeam });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -100,16 +131,91 @@ const createTeam = async (req, res) => {
 // @access  Private/Admin
 const updateTeam = async (req, res) => {
   try {
-    const team = await Team.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    }).populate('players');
+    const { name, shortName, logo, primaryColor, secondaryColor, coach, players } = req.body;
 
+    let team = await Team.findById(req.params.id);
     if (!team) {
       return res.status(404).json({ success: false, message: 'Team not found' });
     }
 
-    res.status(200).json({ success: true, data: team });
+    if (name && name.trim().toLowerCase() !== team.name.toLowerCase()) {
+      const existingTeam = await Team.findOne({
+        name: { $regex: `^${name.trim()}$`, $options: 'i' },
+        _id: { $ne: team._id },
+      });
+      if (existingTeam) {
+        return res.status(400).json({
+          success: false,
+          message: 'A team with this name already exists',
+        });
+      }
+      team.name = name.trim();
+    }
+
+    if (shortName) team.shortName = shortName.toUpperCase().trim();
+    if (logo !== undefined) team.logo = logo;
+    if (primaryColor) team.primaryColor = primaryColor;
+    if (secondaryColor) team.secondaryColor = secondaryColor;
+    if (coach !== undefined) team.coach = coach;
+
+    // Synchronize players if array was provided
+    if (Array.isArray(players)) {
+      const activePlayerIds = [];
+      const usedJerseys = new Set();
+
+      for (let i = 0; i < players.length; i++) {
+        const p = players[i];
+        if (!p || !p.name || !p.name.trim()) continue;
+
+        let jNum = parseInt(p.jerseyNumber, 10);
+        if (isNaN(jNum) || jNum < 0 || jNum > 99 || usedJerseys.has(jNum)) {
+          jNum = 0;
+          while (usedJerseys.has(jNum) && jNum <= 99) jNum++;
+        }
+        usedJerseys.add(jNum);
+
+        if (p._id) {
+          // Update existing player
+          const updatedP = await Player.findByIdAndUpdate(
+            p._id,
+            {
+              name: p.name.trim(),
+              jerseyNumber: jNum,
+              position: ['Guard', 'Forward', 'Center'].includes(p.position) ? p.position : 'Guard',
+              teamId: team._id,
+            },
+            { new: true }
+          );
+          if (updatedP) activePlayerIds.push(updatedP._id);
+        } else {
+          // Create new player
+          const newPlayer = await Player.create({
+            name: p.name.trim(),
+            jerseyNumber: jNum,
+            position: ['Guard', 'Forward', 'Center'].includes(p.position) ? p.position : 'Guard',
+            teamId: team._id,
+            profileImage: p.profileImage || '',
+          });
+          activePlayerIds.push(newPlayer._id);
+        }
+      }
+
+      // Clean up players that were removed
+      const currentIdStrings = activePlayerIds.map((id) => id.toString());
+      const existingPlayers = await Player.find({ teamId: team._id });
+      for (const ep of existingPlayers) {
+        if (!currentIdStrings.includes(ep._id.toString())) {
+          await ep.deleteOne();
+        }
+      }
+
+      team.players = activePlayerIds;
+    }
+
+    await team.save();
+
+    const populatedTeam = await Team.findById(team._id).populate('players');
+    res.status(200).json({ success: true, data: populatedTeam });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -33,6 +33,7 @@ const TeamsPage = () => {
     secondaryColor: '#1E293B',
     coach: '',
   });
+  const [playersList, setPlayersList] = useState([]);
 
   useEffect(() => {
     fetchTeams();
@@ -65,6 +66,13 @@ const TeamsPage = () => {
       secondaryColor: '#1E293B',
       coach: '',
     });
+    // Default 4 player slots ready to be named immediately
+    setPlayersList([
+      { name: '', jerseyNumber: 7, position: 'Guard' },
+      { name: '', jerseyNumber: 11, position: 'Forward' },
+      { name: '', jerseyNumber: 23, position: 'Forward' },
+      { name: '', jerseyNumber: 15, position: 'Center' },
+    ]);
     setIsModalOpen(true);
   };
 
@@ -78,18 +86,91 @@ const TeamsPage = () => {
       secondaryColor: team.secondaryColor || '#1E293B',
       coach: team.coach || '',
     });
+    setPlayersList(
+      (team.players || []).map((p) => ({
+        _id: p._id,
+        name: p.name || '',
+        jerseyNumber: p.jerseyNumber !== undefined ? p.jerseyNumber : 0,
+        position: p.position || 'Guard',
+      }))
+    );
     setIsModalOpen(true);
+  };
+
+  const handleAddPlayer = () => {
+    const nextJersey =
+      playersList.length > 0
+        ? (Math.max(...playersList.map((p) => Number(p.jerseyNumber) || 0)) + 1) % 100
+        : 1;
+    setPlayersList([
+      ...playersList,
+      { name: '', jerseyNumber: nextJersey, position: 'Guard' },
+    ]);
+  };
+
+  const handleLoad3x3Template = () => {
+    setPlayersList([
+      { name: '', jerseyNumber: 7, position: 'Guard' },
+      { name: '', jerseyNumber: 11, position: 'Forward' },
+      { name: '', jerseyNumber: 23, position: 'Forward' },
+      { name: '', jerseyNumber: 15, position: 'Center' },
+    ]);
+  };
+
+  const handleLoad5x5Template = () => {
+    setPlayersList([
+      { name: '', jerseyNumber: 0, position: 'Guard' },
+      { name: '', jerseyNumber: 1, position: 'Guard' },
+      { name: '', jerseyNumber: 3, position: 'Forward' },
+      { name: '', jerseyNumber: 7, position: 'Forward' },
+      { name: '', jerseyNumber: 15, position: 'Center' },
+      { name: '', jerseyNumber: 21, position: 'Guard' },
+      { name: '', jerseyNumber: 23, position: 'Forward' },
+      { name: '', jerseyNumber: 33, position: 'Center' },
+      { name: '', jerseyNumber: 45, position: 'Guard' },
+      { name: '', jerseyNumber: 77, position: 'Forward' },
+    ]);
+  };
+
+  const handlePlayerChange = (index, field, value) => {
+    const updated = [...playersList];
+    updated[index] = { ...updated[index], [field]: value };
+    setPlayersList(updated);
+  };
+
+  const handleRemovePlayer = (index) => {
+    setPlayersList(playersList.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Filter out completely blank players
+      const validPlayers = playersList
+        .filter((p) => p.name && p.name.trim().length > 0)
+        .map((p) => ({
+          ...p,
+          name: p.name.trim(),
+          jerseyNumber: parseInt(p.jerseyNumber, 10) || 0,
+        }));
+
+      const payload = {
+        ...formData,
+        players: validPlayers,
+      };
+
       if (editingTeam) {
-        await teamApi.update(editingTeam._id, formData);
-        setToast({ message: 'Team updated successfully!', type: 'success' });
+        await teamApi.update(editingTeam._id, payload);
+        setToast({
+          message: `Team "${formData.name}" and ${validPlayers.length} players saved successfully!`,
+          type: 'success',
+        });
       } else {
-        await teamApi.create(formData);
-        setToast({ message: 'Team created successfully!', type: 'success' });
+        await teamApi.create(payload);
+        setToast({
+          message: `Team "${formData.name}" created with ${validPlayers.length} players!`,
+          type: 'success',
+        });
       }
       setIsModalOpen(false);
       fetchTeams();
@@ -118,10 +199,10 @@ const TeamsPage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
-            <Shield className="w-8 h-8 text-orange-500" /> 3x3 Team Directory
+            <Shield className="w-8 h-8 text-orange-500" /> Basketball Team Directory
           </h1>
           <p className="text-sm text-slate-400">
-            Registered franchises, coach rosters, and official tournament records
+            Registered franchises, coach rosters, and official tournament records (3x3 & 5x5)
           </p>
         </div>
 
@@ -264,126 +345,268 @@ const TeamsPage = () => {
         </div>
       )}
 
-      {/* Create / Edit Team Modal */}
+      {/* Create / Edit Team Modal with Player Roster */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-lg">
-                {editingTeam ? 'Edit Team Details' : 'Create New Team'}
-              </h3>
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-3xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/40">
+              <div>
+                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-orange-500" />
+                  {editingTeam ? `Edit Team: ${editingTeam.name}` : 'Create New Team & Players'}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Define franchise details and enter all team players in one place
+                </p>
+              </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1"
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
-                  Team Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Thunderbolts 3x3"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
-                    Short Name (3-4 Chars)
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={formData.shortName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, shortName: e.target.value.toUpperCase() })
-                    }
-                    placeholder="THU"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm uppercase focus:border-orange-500 outline-none"
-                    required
-                  />
+            {/* Modal Scrollable Form Body */}
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Section 1: Team Information */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+                  <span className="text-xs font-mono uppercase font-black text-orange-400 tracking-wider">
+                    1. Team Franchise Information
+                  </span>
                 </div>
-                <div>
-                  <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
-                    Head Coach
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.coach}
-                    onChange={(e) => setFormData({ ...formData, coach: e.target.value })}
-                    placeholder="Vikram Mehta"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
-                  Logo URL (Optional)
-                </label>
-                <input
-                  type="url"
-                  value={formData.logo}
-                  onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
-                  placeholder="https://... logo image url"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
-                    Primary Color
-                  </label>
-                  <div className="flex items-center gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                      Team Name *
+                    </label>
                     <input
-                      type="color"
-                      value={formData.primaryColor}
-                      onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
-                      className="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0"
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="e.g. Thunderbolts"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
+                      required
                     />
-                    <span className="text-xs font-mono text-slate-300">{formData.primaryColor}</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                      Short Name (3-5 Chars) *
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={5}
+                      value={formData.shortName}
+                      onChange={(e) =>
+                        setFormData({ ...formData, shortName: e.target.value.toUpperCase() })
+                      }
+                      placeholder="THU"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm uppercase focus:border-orange-500 outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                      Head Coach
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.coach}
+                      onChange={(e) => setFormData({ ...formData, coach: e.target.value })}
+                      placeholder="e.g. Vikram Mehta"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                      Logo URL (Optional)
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.logo}
+                      onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
+                      placeholder="https://... logo image url"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
+                    />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
-                    Secondary Color
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={formData.secondaryColor}
-                      onChange={(e) => setFormData({ ...formData, secondaryColor: e.target.value })}
-                      className="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-0"
-                    />
-                    <span className="text-xs font-mono text-slate-300">{formData.secondaryColor}</span>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                      Primary Color
+                    </label>
+                    <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                      <input
+                        type="color"
+                        value={formData.primaryColor}
+                        onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
+                        className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                      />
+                      <span className="text-xs font-mono text-slate-300">{formData.primaryColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                      Secondary Color
+                    </label>
+                    <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                      <input
+                        type="color"
+                        value={formData.secondaryColor}
+                        onChange={(e) => setFormData({ ...formData, secondaryColor: e.target.value })}
+                        className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                      />
+                      <span className="text-xs font-mono text-slate-300">{formData.secondaryColor}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-600/30 transition-all"
-                >
-                  {editingTeam ? 'Save Changes' : 'Create Team'}
-                </button>
+              {/* Section 2: Team Players Roster */}
+              <div className="space-y-3 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono uppercase font-black text-cyan-400 tracking-wider">
+                      2. Team Players Roster
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 text-[11px] font-mono font-bold">
+                      {playersList.length} Players
+                    </span>
+                  </div>
+
+                  {/* Quick Template Presets */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleLoad3x3Template}
+                      className="px-2.5 py-1 rounded-lg bg-orange-950/60 hover:bg-orange-900 border border-orange-700/60 text-orange-300 text-[11px] font-mono font-bold transition-colors"
+                      title="Fill 4 player slots for 3x3"
+                    >
+                      ⚡ 3x3 Roster (4)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLoad5x5Template}
+                      className="px-2.5 py-1 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-700/60 text-blue-300 text-[11px] font-mono font-bold transition-colors"
+                      title="Fill 10 player slots for 5x5"
+                    >
+                      ⚡ 5x5 Roster (10)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddPlayer}
+                      className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold shadow-md transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Player
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  Enter all player names, jersey numbers, and positions. Players will be automatically created and registered to this team.
+                </p>
+
+                {/* Player Rows List */}
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {playersList.length > 0 ? (
+                    playersList.map((player, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-colors"
+                      >
+                        <span className="w-6 text-center text-xs font-mono font-bold text-slate-500">
+                          {idx + 1}
+                        </span>
+
+                        {/* Jersey Number */}
+                        <div className="w-20">
+                          <input
+                            type="number"
+                            min="0"
+                            max="99"
+                            value={player.jerseyNumber}
+                            onChange={(e) => handlePlayerChange(idx, 'jerseyNumber', e.target.value)}
+                            placeholder="#"
+                            title="Jersey Number (0-99)"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-amber-400 font-digital font-bold text-center text-sm outline-none focus:border-amber-400"
+                            required
+                          />
+                        </div>
+
+                        {/* Player Name */}
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={player.name}
+                            onChange={(e) => handlePlayerChange(idx, 'name', e.target.value)}
+                            placeholder={`Player ${idx + 1} full name (e.g. Rahul Sharma)`}
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm outline-none focus:border-orange-500"
+                          />
+                        </div>
+
+                        {/* Position */}
+                        <div className="w-28">
+                          <select
+                            value={player.position}
+                            onChange={(e) => handlePlayerChange(idx, 'position', e.target.value)}
+                            className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono outline-none focus:border-orange-500 cursor-pointer"
+                          >
+                            <option value="Guard">Guard</option>
+                            <option value="Forward">Forward</option>
+                            <option value="Center">Center</option>
+                          </select>
+                        </div>
+
+                        {/* Remove Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePlayer(idx)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"
+                          title="Remove player"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-6 text-center rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 space-y-2">
+                      <Users className="w-8 h-8 text-slate-600 mx-auto" />
+                      <p className="text-sm font-bold text-slate-300">No players added yet</p>
+                      <p className="text-xs text-slate-500">
+                        Click "+ Add Player" or choose a quick 3x3 / 5x5 template above to enter player names.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-800 bg-slate-900">
+                <div className="text-xs font-mono text-slate-400">
+                  {playersList.filter((p) => p.name && p.name.trim()).length} valid player(s) ready to save
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+                  >
+                    {editingTeam ? 'Save Team & Players' : 'Create Team & Register Players'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
