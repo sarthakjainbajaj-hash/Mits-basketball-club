@@ -338,10 +338,22 @@ const TeamsPage = () => {
           ))}
         </div>
       ) : (
-        <div className="p-12 text-center rounded-3xl bg-slate-900 border border-slate-800">
-          <Shield className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <p className="text-white font-bold text-base">No Teams Found</p>
-          <p className="text-xs text-slate-400 mt-1">Try a different search or create a new team</p>
+        <div className="p-12 text-center rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+          <Shield className="w-12 h-12 text-slate-600 mx-auto" />
+          <div>
+            <p className="text-white font-bold text-lg">No Teams Registered Yet</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Get started by creating your first basketball team franchise and adding player names.
+            </p>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4" /> Create First Team & Players
+            </button>
+          )}
         </div>
       )}
 

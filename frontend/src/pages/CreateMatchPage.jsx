@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { matchApi } from '../api/matchApi';
 import { teamApi } from '../api/teamApi';
 import { tournamentApi } from '../api/tournamentApi';
@@ -516,6 +516,29 @@ const CreateMatchPage = () => {
           </button>
         </div>
       </div>
+
+      {/* Teams Requirement Notice */}
+      {teams.length < 2 && (
+        <div className="p-5 rounded-3xl bg-amber-950/40 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <AlertCircle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="text-sm font-bold text-amber-200">
+                At least 2 teams are required to schedule a match
+              </p>
+              <p className="text-xs text-amber-400/80 mt-0.5">
+                You currently have {teams.length} team(s) registered. Add your teams and player rosters first.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/teams"
+            className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shrink-0 whitespace-nowrap shadow-md text-center transition-all active:scale-95"
+          >
+            + Go to Teams Directory
+          </Link>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Match Identity & Teams Selection */}
