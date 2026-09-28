@@ -5,8 +5,11 @@ const ShotClock = ({
   shotClockRemaining = 12,
   shotClockRunning = false,
   shotClockStartedAt = null,
+  matchType = '3x3', // '3x3' or '5x5'
   onReset12 = null,
   onReset2 = null,
+  onResetFull = null,
+  onResetShort = null,
   onTogglePause = null,
   onExpire = null,
   isScorer = false,
@@ -42,14 +45,27 @@ const ShotClock = ({
   }, [shotClockRemaining, shotClockRunning, shotClockStartedAt, onExpire]);
 
   const roundedSeconds = Math.max(0, Math.ceil(displaySecs));
-  const isWarning = roundedSeconds <= 3 && roundedSeconds > 0;
+  const isWarning = roundedSeconds <= (matchType === '5x5' ? 5 : 3) && roundedSeconds > 0;
   const isExpired = roundedSeconds === 0;
+
+  const fullSecs = matchType === '5x5' ? 24 : 12;
+  const shortSecs = matchType === '5x5' ? 14 : 2;
+
+  const handleFullReset = () => {
+    if (onResetFull) onResetFull();
+    else if (onReset12) onReset12();
+  };
+
+  const handleShortReset = () => {
+    if (onResetShort) onResetShort();
+    else if (onReset2) onReset2();
+  };
 
   return (
     <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-black/60 border border-slate-800 shadow-2xl relative">
       <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1.5">
         <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-        SHOT CLOCK (12s)
+        SHOT CLOCK ({fullSecs}s)
       </div>
 
       {/* Main Digital Display */}
@@ -77,25 +93,21 @@ const ShotClock = ({
       {/* Scorer Controls Bar */}
       {isScorer && (
         <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-slate-800/80 w-full justify-center">
-          {onReset12 && (
-            <button
-              onClick={onReset12}
-              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 font-mono text-xs font-bold border border-cyan-500/30 flex items-center gap-1 transition-all active:scale-95"
-              title="Reset Shot Clock to 12s"
-            >
-              <RotateCcw className="w-3 h-3" /> 12
-            </button>
-          )}
+          <button
+            onClick={handleFullReset}
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 font-mono text-xs font-bold border border-cyan-500/30 flex items-center gap-1 transition-all active:scale-95"
+            title={`Reset Shot Clock to ${fullSecs}s`}
+          >
+            <RotateCcw className="w-3 h-3" /> {fullSecs}s
+          </button>
 
-          {onReset2 && (
-            <button
-              onClick={onReset2}
-              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 font-mono text-xs font-bold border border-amber-500/30 flex items-center gap-1 transition-all active:scale-95"
-              title="Reset Shot Clock to 2s (Offensive Rebound / Quick Reset)"
-            >
-              <RotateCcw className="w-3 h-3" /> 2s
-            </button>
-          )}
+          <button
+            onClick={handleShortReset}
+            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 font-mono text-xs font-bold border border-amber-500/30 flex items-center gap-1 transition-all active:scale-95"
+            title={`Reset Shot Clock to ${shortSecs}s (Offensive Rebound)`}
+          >
+            <RotateCcw className="w-3 h-3" /> {shortSecs}s
+          </button>
 
           {onTogglePause && (
             <button

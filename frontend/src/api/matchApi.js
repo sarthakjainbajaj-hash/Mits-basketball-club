@@ -19,6 +19,8 @@ export const matchApi = {
   togglePossession: (id, possession) => axiosClient.post(`/matches/${id}/possession`, { possession }),
   callTimeout: (id, team) => axiosClient.post(`/matches/${id}/timeout`, { team }),
   recordPlayerStat: (id, payload) => axiosClient.post(`/matches/${id}/player-stats`, payload),
+  substitute: (id, payload) => axiosClient.post(`/matches/${id}/substitute`, payload),
+  controlPeriod: (id, payload) => axiosClient.post(`/matches/${id}/period`, payload),
   undo: (id) => axiosClient.post(`/matches/${id}/undo`),
   end: (id) => axiosClient.post(`/matches/${id}/end`),
 };

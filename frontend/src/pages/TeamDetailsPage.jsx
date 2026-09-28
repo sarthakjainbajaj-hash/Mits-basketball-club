@@ -62,6 +62,9 @@ const TeamDetailsPage = () => {
   const ptsAgainst = team.stats?.pointsAgainst || 0;
   const diff = ptsFor - ptsAgainst;
 
+  const stats3x3 = team.stats?.matches3x3 || { played: 0, wins: 0, losses: 0 };
+  const stats5x5 = team.stats?.matches5x5 || { played: 0, wins: 0, losses: 0 };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Back Link */}
@@ -113,19 +116,52 @@ const TeamDetailsPage = () => {
               {team.name}
             </h1>
             <p className="text-sm text-slate-400">
-              Official Basketball 3x3 Franchise & Roster
+              Official Basketball Franchise & Complete Roster
             </p>
           </div>
         </div>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-8 pt-6 border-t border-slate-800/80">
+        {/* Format Records Breakdown (3x3 vs 5x5) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-slate-800/80">
+          <div className="p-4 rounded-2xl bg-orange-950/20 border border-orange-500/30 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-mono font-bold uppercase text-orange-400 block">
+                🏀 3x3 Basketball Record
+              </span>
+              <span className="text-xs text-slate-400">FIBA 3x3 Circuit</span>
+            </div>
+            <div className="text-right font-mono">
+              <div className="text-xl font-bold text-white font-digital">
+                {stats3x3.wins}W - {stats3x3.losses}L
+              </div>
+              <span className="text-[11px] text-slate-400">{stats3x3.played} Played</span>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-blue-950/20 border border-blue-500/30 flex items-center justify-between">
+            <div>
+              <span className="text-xs font-mono font-bold uppercase text-blue-400 block">
+                🏀 5x5 Basketball Record
+              </span>
+              <span className="text-xs text-slate-400">Standard 4-Quarter League</span>
+            </div>
+            <div className="text-right font-mono">
+              <div className="text-xl font-bold text-white font-digital">
+                {stats5x5.wins}W - {stats5x5.losses}L
+              </div>
+              <span className="text-[11px] text-slate-400">{stats5x5.played} Played</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Overall Stats Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4 pt-4 border-t border-slate-800/60">
           <div className="p-3.5 rounded-2xl bg-slate-950/60 text-center">
-            <span className="text-[10px] uppercase font-mono text-slate-400">MATCHES</span>
+            <span className="text-[10px] uppercase font-mono text-slate-400">TOTAL MATCHES</span>
             <div className="font-digital text-2xl font-black text-white">{played}</div>
           </div>
           <div className="p-3.5 rounded-2xl bg-slate-950/60 text-center">
-            <span className="text-[10px] uppercase font-mono text-emerald-400">W - L</span>
+            <span className="text-[10px] uppercase font-mono text-emerald-400">OVERALL W - L</span>
             <div className="font-digital text-2xl font-black text-emerald-400">
               {wins} - {losses}
             </div>
@@ -139,7 +175,7 @@ const TeamDetailsPage = () => {
             <div className="font-digital text-2xl font-black text-cyan-400">{ptsFor}</div>
           </div>
           <div className="p-3.5 rounded-2xl bg-slate-950/60 text-center col-span-2 sm:col-span-1">
-            <span className="text-[10px] uppercase font-mono text-purple-400">DIFF</span>
+            <span className="text-[10px] uppercase font-mono text-purple-400">POINT DIFF</span>
             <div
               className={`font-digital text-2xl font-black ${
                 diff >= 0 ? 'text-emerald-400' : 'text-red-400'
@@ -153,19 +189,19 @@ const TeamDetailsPage = () => {
 
       {/* Roster & Matches Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Active 3x3 Players Roster */}
+        {/* Active Players Roster */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-orange-400" />
-              <h2 className="font-bold text-white text-base">Active Player Roster</h2>
+              <h2 className="font-bold text-white text-base">Registered Player Roster</h2>
             </div>
             <span className="text-xs font-mono text-slate-400">
               {team.players?.length || 0} Registered
             </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
             {team.players && team.players.length > 0 ? (
               team.players.map((p) => (
                 <div
@@ -208,7 +244,7 @@ const TeamDetailsPage = () => {
             <span className="text-xs font-mono text-slate-400">Recent Games</span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
             {team.recentMatches && team.recentMatches.length > 0 ? (
               team.recentMatches.map((m) => (
                 <Link
@@ -217,7 +253,18 @@ const TeamDetailsPage = () => {
                   className="block p-3.5 rounded-2xl bg-slate-950/60 hover:bg-slate-800/60 border border-slate-800 transition-all group"
                 >
                   <div className="flex items-center justify-between text-xs text-slate-400 font-mono mb-1.5">
-                    <span>{m.matchName}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                          m.matchType === '5x5'
+                            ? 'bg-blue-950 text-blue-400 border border-blue-800'
+                            : 'bg-orange-950 text-orange-400 border border-orange-800'
+                        }`}
+                      >
+                        {m.matchType || '3x3'}
+                      </span>
+                      <span>{m.matchName}</span>
+                    </div>
                     <span>{new Date(m.scheduledDate || m.createdAt).toLocaleDateString()}</span>
                   </div>
                   <div className="flex items-center justify-between">

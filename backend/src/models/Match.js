@@ -9,6 +9,7 @@ const matchPlayerSchema = new mongoose.Schema(
     },
     name: { type: String, required: true },
     jerseyNumber: { type: Number, required: true },
+    position: { type: String, default: 'Guard' },
   },
   { _id: false }
 );
@@ -28,20 +29,39 @@ const matchPlayerStatSchema = new mongoose.Schema(
       required: true,
     },
     team: { type: String, enum: ['A', 'B'], required: true },
+    isStarter: { type: Boolean, default: true },
+    isActive: { type: Boolean, default: true }, // on court vs bench
     points: { type: Number, default: 0 },
     onePoints: { type: Number, default: 0 },
     twoPoints: { type: Number, default: 0 },
+    threePoints: { type: Number, default: 0 }, // For 5x5
     rebounds: { type: Number, default: 0 },
     assists: { type: Number, default: 0 },
     steals: { type: Number, default: 0 },
     blocks: { type: Number, default: 0 },
     fouls: { type: Number, default: 0 },
+    minutes: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const periodScoreSchema = new mongoose.Schema(
+  {
+    period: { type: String, required: true }, // 'Q1', 'Q2', 'Q3', 'Q4', 'OT' or 'REGULATION'
+    scoreA: { type: Number, default: 0 },
+    scoreB: { type: Number, default: 0 },
   },
   { _id: false }
 );
 
 const matchSchema = new mongoose.Schema(
   {
+    matchType: {
+      type: String,
+      enum: ['3x3', '5x5'],
+      default: '3x3',
+      required: true,
+    },
     tournamentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Tournament',
@@ -54,7 +74,7 @@ const matchSchema = new mongoose.Schema(
     },
     venue: {
       type: String,
-      default: 'Main Court 3x3',
+      default: 'Main Court',
       trim: true,
     },
     scheduledDate: {
@@ -75,8 +95,21 @@ const matchSchema = new mongoose.Schema(
       ref: 'Team',
       required: [true, 'Team B is required'],
     },
+
+    // Detailed Rosters for 3x3 (3 starters, 1 sub) and 5x5 (5 starters, 5 subs)
+    teamA_roster: {
+      starters: [matchPlayerSchema],
+      substitutes: [matchPlayerSchema],
+    },
+    teamB_roster: {
+      starters: [matchPlayerSchema],
+      substitutes: [matchPlayerSchema],
+    },
+
+    // Backward-compatibility all players
     playersA: [matchPlayerSchema],
     playersB: [matchPlayerSchema],
+
     scoreA: {
       type: Number,
       default: 0,
@@ -99,7 +132,7 @@ const matchSchema = new mongoose.Schema(
     },
     timeoutsA: {
       type: Number,
-      default: 1, // FIBA 3x3 standard 1 timeout per team
+      default: 1,
       min: 0,
     },
     timeoutsB: {
@@ -107,30 +140,32 @@ const matchSchema = new mongoose.Schema(
       default: 1,
       min: 0,
     },
-    gameDuration: {
-      type: Number,
-      default: 600, // 10 minutes in seconds
+
+    // Match Rules & Format Settings
+    settings: {
+      gameDuration: { type: Number, default: 600 },
+      shotClock: { type: Number, default: 12 },
+      targetScore: { type: Number, default: 21 },
+      numberOfQuarters: { type: Number, default: 1 },
+      quarterDuration: { type: Number, default: 600 },
+      foulLimit: { type: Number, default: 7 },
     },
-    remainingTime: {
-      type: Number,
-      default: 600,
+
+    // Legacy fields maintained for quick access
+    gameDuration: { type: Number, default: 600 },
+    remainingTime: { type: Number, default: 600 },
+    shotClockDuration: { type: Number, default: 12 },
+    shotClockRemaining: { type: Number, default: 12 },
+    targetScore: { type: Number, default: 21 },
+    foulLimit: { type: Number, default: 7 },
+
+    // Quarter / Period System
+    currentPeriod: {
+      type: String,
+      default: 'Q1', // 'REGULATION' for 3x3, 'Q1', 'Q2', 'Q3', 'Q4' for 5x5
     },
-    shotClockDuration: {
-      type: Number,
-      default: 12, // 12 seconds 3x3 shot clock
-    },
-    shotClockRemaining: {
-      type: Number,
-      default: 12,
-    },
-    targetScore: {
-      type: Number,
-      default: 21, // 3x3 sudden victory target score
-    },
-    foulLimit: {
-      type: Number,
-      default: 7, // 7 fouls = penalty
-    },
+    periodScores: [periodScoreSchema],
+
     status: {
       type: String,
       enum: ['SCHEDULED', 'LIVE', 'PAUSED', 'COMPLETED'],
@@ -146,7 +181,7 @@ const matchSchema = new mongoose.Schema(
       default: false,
     },
     timerStartedAt: {
-      type: Number, // ms epoch
+      type: Number,
       default: null,
     },
     shotClockRunning: {
@@ -154,7 +189,7 @@ const matchSchema = new mongoose.Schema(
       default: false,
     },
     shotClockStartedAt: {
-      type: Number, // ms epoch
+      type: Number,
       default: null,
     },
     startedAt: {
@@ -170,7 +205,7 @@ const matchSchema = new mongoose.Schema(
       default: null,
     },
     duration: {
-      type: Number, // total elapsed seconds
+      type: Number,
       default: 0,
     },
     winner: {

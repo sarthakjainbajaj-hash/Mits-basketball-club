@@ -3,13 +3,17 @@ const MatchEvent = require('../models/MatchEvent');
 const Team = require('../models/Team');
 const Player = require('../models/Player');
 
-// @desc    Get matches with search & filters
+// @desc    Get matches with search & filters (including matchType: 3x3 or 5x5)
 // @route   GET /api/matches
 // @access  Public
 const getMatches = async (req, res) => {
   try {
-    const { tournamentId, teamId, status, search, limit } = req.query;
+    const { tournamentId, teamId, status, matchType, search, limit } = req.query;
     let query = {};
+
+    if (matchType && ['3x3', '5x5'].includes(matchType)) {
+      query.matchType = matchType;
+    }
 
     if (tournamentId) {
       query.tournamentId = tournamentId;
@@ -24,7 +28,6 @@ const getMatches = async (req, res) => {
     }
 
     if (search) {
-      // Find matching teams first
       const matchingTeams = await Team.find({
         name: { $regex: search, $options: 'i' },
       }).select('_id');
@@ -54,7 +57,7 @@ const getMatches = async (req, res) => {
   }
 };
 
-// @desc    Get single match by ID with events
+// @desc    Get single match by ID with events & full rosters
 // @route   GET /api/matches/:id
 // @access  Public
 const getMatchById = async (req, res) => {
@@ -64,16 +67,18 @@ const getMatchById = async (req, res) => {
       .populate('teamB', 'name shortName logo primaryColor secondaryColor coach')
       .populate('tournamentId', 'name venue organizer')
       .populate('playersA.player', 'name jerseyNumber position profileImage')
-      .populate('playersB.player', 'name jerseyNumber position profileImage');
+      .populate('playersB.player', 'name jerseyNumber position profileImage')
+      .populate('teamA_roster.starters.player', 'name jerseyNumber position profileImage')
+      .populate('teamA_roster.substitutes.player', 'name jerseyNumber position profileImage')
+      .populate('teamB_roster.starters.player', 'name jerseyNumber position profileImage')
+      .populate('teamB_roster.substitutes.player', 'name jerseyNumber position profileImage');
 
     if (!match) {
       return res.status(404).json({ success: false, message: 'Match not found' });
     }
 
-    // Fetch match event history
     const events = await MatchEvent.find({ matchId: match._id }).sort({ timestamp: 1 });
 
-    // Compute live remaining time if timer is currently running
     const currentRemainingTime = match.getCurrentRemainingTime();
     const currentShotClockRemaining = match.getCurrentShotClockRemaining();
 
@@ -88,12 +93,13 @@ const getMatchById = async (req, res) => {
   }
 };
 
-// @desc    Create new match
+// @desc    Create new match with 3x3 or 5x5 validation
 // @route   POST /api/matches
 // @access  Private/Admin
 const createMatch = async (req, res) => {
   try {
     const {
+      matchType = '3x3',
       tournamentId,
       matchName,
       venue,
@@ -101,13 +107,16 @@ const createMatch = async (req, res) => {
       scheduledTime,
       teamA,
       teamB,
-      playersA,
-      playersB,
-      gameDuration,
-      shotClockDuration,
-      targetScore,
-      foulLimit,
+      teamA_starters = [],
+      teamA_substitutes = [],
+      teamB_starters = [],
+      teamB_substitutes = [],
+      settings = {},
     } = req.body;
+
+    if (!['3x3', '5x5'].includes(matchType)) {
+      return res.status(400).json({ success: false, message: 'Invalid match type. Must be 3x3 or 5x5.' });
+    }
 
     if (!matchName || !teamA || !teamB) {
       return res.status(400).json({
@@ -123,106 +132,170 @@ const createMatch = async (req, res) => {
       });
     }
 
-    // Verify teams exist
-    const teamADoc = await Team.findById(teamA);
-    const teamBDoc = await Team.findById(teamB);
+    // Strict Backend Roster Validation
+    const reqStarters = matchType === '3x3' ? 3 : 5;
+    const reqSubs = matchType === '3x3' ? 1 : 5;
+    const totalRequired = reqStarters + reqSubs;
 
-    if (!teamADoc || !teamBDoc) {
-      return res.status(404).json({
+    if (teamA_starters.length !== reqStarters || teamA_substitutes.length !== reqSubs) {
+      return res.status(400).json({
         success: false,
-        message: 'One or both selected teams could not be found',
+        message:
+          matchType === '3x3'
+            ? '3x3 requires exactly 3 starting players and 1 substitute for Team A.'
+            : '5x5 requires exactly 5 starting players and 5 substitutes for Team A.',
       });
     }
 
-    // Format playersA and playersB
-    let formattedPlayersA = [];
-    if (playersA && Array.isArray(playersA) && playersA.length > 0) {
-      const pDocs = await Player.find({ _id: { $in: playersA } });
-      formattedPlayersA = pDocs.map((p) => ({
-        player: p._id,
-        name: p.name,
-        jerseyNumber: p.jerseyNumber,
-      }));
-    } else {
-      // Auto-populate from team players if not explicitly passed
-      const pDocs = await Player.find({ teamId: teamA }).limit(4);
-      formattedPlayersA = pDocs.map((p) => ({
-        player: p._id,
-        name: p.name,
-        jerseyNumber: p.jerseyNumber,
-      }));
+    if (teamB_starters.length !== reqStarters || teamB_substitutes.length !== reqSubs) {
+      return res.status(400).json({
+        success: false,
+        message:
+          matchType === '3x3'
+            ? '3x3 requires exactly 3 starting players and 1 substitute for Team B.'
+            : '5x5 requires exactly 5 starting players and 5 substitutes for Team B.',
+      });
     }
 
-    let formattedPlayersB = [];
-    if (playersB && Array.isArray(playersB) && playersB.length > 0) {
-      const pDocs = await Player.find({ _id: { $in: playersB } });
-      formattedPlayersB = pDocs.map((p) => ({
+    // Helper to format player documents into embedded schema
+    const formatPlayerList = async (playerIds) => {
+      const docs = await Player.find({ _id: { $in: playerIds } });
+      return docs.map((p) => ({
         player: p._id,
         name: p.name,
         jerseyNumber: p.jerseyNumber,
+        position: p.position || 'Guard',
       }));
-    } else {
-      const pDocs = await Player.find({ teamId: teamB }).limit(4);
-      formattedPlayersB = pDocs.map((p) => ({
-        player: p._id,
-        name: p.name,
-        jerseyNumber: p.jerseyNumber,
-      }));
-    }
+    };
 
-    // Initialize player stats entries for box score
+    const formattedAStarters = await formatPlayerList(teamA_starters);
+    const formattedASubs = await formatPlayerList(teamA_substitutes);
+    const formattedBStarters = await formatPlayerList(teamB_starters);
+    const formattedBSubs = await formatPlayerList(teamB_substitutes);
+
+    const allPlayersA = [...formattedAStarters, ...formattedASubs];
+    const allPlayersB = [...formattedBStarters, ...formattedBSubs];
+
+    // Initial in-match player stats with starter and active flags
     const initialPlayerStats = [
-      ...formattedPlayersA.map((p) => ({
+      ...formattedAStarters.map((p) => ({
         playerId: p.player,
         playerName: p.name,
         jerseyNumber: p.jerseyNumber,
         teamId: teamA,
         team: 'A',
+        isStarter: true,
+        isActive: true, // on court
         points: 0,
         onePoints: 0,
         twoPoints: 0,
+        threePoints: 0,
         rebounds: 0,
         assists: 0,
         steals: 0,
         blocks: 0,
         fouls: 0,
+        minutes: 0,
       })),
-      ...formattedPlayersB.map((p) => ({
+      ...formattedASubs.map((p) => ({
+        playerId: p.player,
+        playerName: p.name,
+        jerseyNumber: p.jerseyNumber,
+        teamId: teamA,
+        team: 'A',
+        isStarter: false,
+        isActive: false, // on bench
+        points: 0,
+        onePoints: 0,
+        twoPoints: 0,
+        threePoints: 0,
+        rebounds: 0,
+        assists: 0,
+        steals: 0,
+        blocks: 0,
+        fouls: 0,
+        minutes: 0,
+      })),
+      ...formattedBStarters.map((p) => ({
         playerId: p.player,
         playerName: p.name,
         jerseyNumber: p.jerseyNumber,
         teamId: teamB,
         team: 'B',
+        isStarter: true,
+        isActive: true,
         points: 0,
         onePoints: 0,
         twoPoints: 0,
+        threePoints: 0,
         rebounds: 0,
         assists: 0,
         steals: 0,
         blocks: 0,
         fouls: 0,
+        minutes: 0,
+      })),
+      ...formattedBSubs.map((p) => ({
+        playerId: p.player,
+        playerName: p.name,
+        jerseyNumber: p.jerseyNumber,
+        teamId: teamB,
+        team: 'B',
+        isStarter: false,
+        isActive: false,
+        points: 0,
+        onePoints: 0,
+        twoPoints: 0,
+        threePoints: 0,
+        rebounds: 0,
+        assists: 0,
+        steals: 0,
+        blocks: 0,
+        fouls: 0,
+        minutes: 0,
       })),
     ];
 
-    const matchDurationSec = gameDuration ? Number(gameDuration) : 600;
-    const shotClockSec = shotClockDuration ? Number(shotClockDuration) : 12;
+    // Compute format-dependent settings
+    const matchSettings = {
+      gameDuration: settings.gameDuration || (matchType === '3x3' ? 600 : 600),
+      shotClock: settings.shotClock || (matchType === '3x3' ? 12 : 24),
+      targetScore: settings.targetScore !== undefined ? settings.targetScore : matchType === '3x3' ? 21 : 0,
+      numberOfQuarters: settings.numberOfQuarters || (matchType === '3x3' ? 1 : 4),
+      quarterDuration: settings.quarterDuration || (matchType === '3x3' ? 600 : 600),
+      foulLimit: settings.foulLimit || (matchType === '3x3' ? 7 : 5),
+    };
+
+    const initialPeriod = matchType === '3x3' ? 'REGULATION' : 'Q1';
 
     const match = await Match.create({
+      matchType,
       tournamentId: tournamentId || null,
       matchName,
-      venue: venue || 'Main Court 3x3',
+      venue: venue || (matchType === '3x3' ? '3x3 Center Court' : 'Main Arena Court'),
       scheduledDate: scheduledDate || new Date(),
       scheduledTime: scheduledTime || '18:00',
       teamA,
       teamB,
-      playersA: formattedPlayersA,
-      playersB: formattedPlayersB,
-      gameDuration: matchDurationSec,
-      remainingTime: matchDurationSec,
-      shotClockDuration: shotClockSec,
-      shotClockRemaining: shotClockSec,
-      targetScore: targetScore ? Number(targetScore) : 21,
-      foulLimit: foulLimit ? Number(foulLimit) : 7,
+      teamA_roster: {
+        starters: formattedAStarters,
+        substitutes: formattedASubs,
+      },
+      teamB_roster: {
+        starters: formattedBStarters,
+        substitutes: formattedBSubs,
+      },
+      playersA: allPlayersA,
+      playersB: allPlayersB,
+      settings: matchSettings,
+      gameDuration: matchSettings.quarterDuration,
+      remainingTime: matchSettings.quarterDuration,
+      shotClockDuration: matchSettings.shotClock,
+      shotClockRemaining: matchSettings.shotClock,
+      targetScore: matchSettings.targetScore,
+      foulLimit: matchSettings.foulLimit,
+      currentPeriod: initialPeriod,
+      periodScores: [{ period: initialPeriod, scoreA: 0, scoreB: 0 }],
       status: 'SCHEDULED',
       playerStats: initialPlayerStats,
     });
@@ -279,7 +352,7 @@ const deleteMatch = async (req, res) => {
   }
 };
 
-// @desc    Get match summary & printable report
+// @desc    Get match summary & printable report with format breakdown
 // @route   GET /api/matches/:id/summary
 // @access  Public
 const getMatchSummary = async (req, res) => {
@@ -297,10 +370,13 @@ const getMatchSummary = async (req, res) => {
 
     const summary = {
       matchId: match._id,
+      matchType: match.matchType || '3x3',
       matchName: match.matchName,
       tournament: match.tournamentId ? match.tournamentId.name : 'Exhibition Match',
       venue: match.venue,
       status: match.status,
+      currentPeriod: match.currentPeriod,
+      periodScores: match.periodScores,
       startedAt: match.startedAt,
       endedAt: match.endedAt,
       durationMinutes: match.duration ? Math.round(match.duration / 60) : 10,
@@ -310,6 +386,8 @@ const getMatchSummary = async (req, res) => {
         score: match.scoreA,
         fouls: match.foulsA,
         coach: match.teamA.coach,
+        starters: match.teamA_roster?.starters || [],
+        substitutes: match.teamA_roster?.substitutes || [],
       },
       teamB: {
         name: match.teamB.name,
@@ -317,6 +395,8 @@ const getMatchSummary = async (req, res) => {
         score: match.scoreB,
         fouls: match.foulsB,
         coach: match.teamB.coach,
+        starters: match.teamB_roster?.starters || [],
+        substitutes: match.teamB_roster?.substitutes || [],
       },
       winner:
         match.winner === 'A'

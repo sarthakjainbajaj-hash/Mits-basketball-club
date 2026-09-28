@@ -51,6 +51,8 @@ const PublicScoreboardPage = () => {
           playShotClockBuzzer();
         } else if (type === 'GAME_END') {
           playGameEndHorn();
+        } else if (type === 'PERIOD_END') {
+          playGameEndHorn();
         } else if (type === 'WHISTLE') {
           playWhistle();
         }
@@ -104,21 +106,37 @@ const PublicScoreboardPage = () => {
   }
 
   const isCompleted = match.status === 'COMPLETED';
+  const is5x5 = match.matchType === '5x5';
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col justify-between p-3 sm:p-6 lg:p-8 select-none overflow-x-hidden">
       {/* Top TV Header Bar */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-900">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center shadow-lg shadow-orange-600/30">
+          <div
+            className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-lg ${
+              is5x5 ? 'bg-blue-600 shadow-blue-600/30' : 'bg-orange-600 shadow-orange-600/30'
+            }`}
+          >
             <Flame className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-digital text-lg sm:text-xl font-black tracking-wider text-white">
-              HOOP<span className="text-orange-500">SCORE</span> 3X3
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-digital text-lg sm:text-xl font-black tracking-wider text-white">
+                HOOP<span className={is5x5 ? 'text-blue-500' : 'text-orange-500'}>SCORE</span>
+              </h1>
+              <span
+                className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
+                  is5x5
+                    ? 'bg-blue-950/80 text-blue-400 border-blue-800'
+                    : 'bg-orange-950/80 text-orange-400 border-orange-800'
+                }`}
+              >
+                {is5x5 ? '5X5 FULL COURT' : '3X3 PRO ARENA'}
+              </span>
+            </div>
             <p className="text-[10px] text-slate-400 font-mono hidden sm:block">
-              {match.tournamentId?.name || 'Live 3x3 Championship Series'} • {match.venue}
+              {match.tournamentId?.name || 'Championship Broadcast Series'} • {match.venue}
             </p>
           </div>
         </div>
@@ -165,11 +183,11 @@ const PublicScoreboardPage = () => {
         {isCompleted && (
           <div className="max-w-3xl mx-auto mb-8 p-4 rounded-2xl bg-emerald-950/90 border border-emerald-500 text-center animate-in fade-in">
             <h2 className="text-2xl sm:text-4xl font-black text-emerald-400 font-digital tracking-wider">
-              MATCH COMPLETED
+              MATCH COMPLETED — {match.scoreA} : {match.scoreB}
             </h2>
             <p className="text-sm font-mono text-slate-200 mt-1">
               WINNER:{' '}
-              <span className="font-bold text-amber-400 text-lg">
+              <span className="font-bold text-amber-400 text-lg uppercase">
                 {match.winner === 'A'
                   ? match.teamA?.name
                   : match.winner === 'B'
@@ -177,6 +195,21 @@ const PublicScoreboardPage = () => {
                   : 'DRAW'}
               </span>
             </p>
+          </div>
+        )}
+
+        {/* 5x5 Quarter Scores Ticker on Spectator TV */}
+        {is5x5 && match.periodScores && match.periodScores.length > 0 && (
+          <div className="max-w-xl mx-auto mb-6 p-2.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-center gap-6 text-xs font-mono">
+            <span className="text-slate-500 uppercase font-bold">Quarter Scores:</span>
+            {match.periodScores.map((ps) => (
+              <div key={ps.period} className="flex items-center gap-2">
+                <span className="text-cyan-400 font-bold">{ps.period}:</span>
+                <span className="text-white font-digital font-bold text-base">
+                  {ps.scoreA} - {ps.scoreB}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
@@ -189,7 +222,8 @@ const PublicScoreboardPage = () => {
               score={match.scoreA}
               fouls={match.foulsA}
               timeouts={match.timeoutsA}
-              foulLimit={match.foulLimit || 7}
+              foulLimit={match.foulLimit || (is5x5 ? 5 : 7)}
+              matchType={match.matchType || '3x3'}
               isPossession={match.possession === 'A'}
               isScorer={false}
               large={true}
@@ -208,7 +242,7 @@ const PublicScoreboardPage = () => {
             {/* Huge Game Clock */}
             <div className="p-6 rounded-3xl bg-slate-950/80 border border-slate-800 shadow-2xl w-full flex flex-col items-center">
               <span className="text-xs font-mono uppercase font-bold text-slate-400 tracking-widest mb-2">
-                GAME CLOCK
+                {is5x5 ? `PERIOD: ${match.currentPeriod || 'Q1'}` : 'REGULATION CLOCK'}
               </span>
               <DigitalTimer
                 remainingTime={match.remainingTime}
@@ -218,20 +252,23 @@ const PublicScoreboardPage = () => {
               />
             </div>
 
-            {/* Shot Clock (12s) */}
+            {/* Shot Clock (12s for 3x3, 24s for 5x5) */}
             <div className="w-full max-w-xs">
               <ShotClock
                 shotClockRemaining={match.shotClockRemaining}
                 shotClockRunning={match.shotClockRunning}
                 shotClockStartedAt={match.shotClockStartedAt}
+                matchType={match.matchType || '3x3'}
                 isScorer={false}
                 large={true}
               />
             </div>
 
             <div className="text-center">
-              <span className="text-xs font-mono uppercase tracking-widest text-slate-500">
-                FIRST TO {match.targetScore || 21} PTS WINS
+              <span className="text-xs font-mono uppercase tracking-widest text-slate-400">
+                {is5x5
+                  ? `4 QUARTERS • ${match.settings?.shotClock || 24}S SHOT CLOCK`
+                  : `FIRST TO ${match.targetScore || 21} PTS WINS`}
               </span>
             </div>
           </div>
@@ -244,7 +281,8 @@ const PublicScoreboardPage = () => {
               score={match.scoreB}
               fouls={match.foulsB}
               timeouts={match.timeoutsB}
-              foulLimit={match.foulLimit || 7}
+              foulLimit={match.foulLimit || (is5x5 ? 5 : 7)}
+              matchType={match.matchType || '3x3'}
               isPossession={match.possession === 'B'}
               isScorer={false}
               large={true}
@@ -256,10 +294,12 @@ const PublicScoreboardPage = () => {
       {/* Bottom Ticker Bar */}
       <div className="pt-3 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-mono gap-2">
         <div>
-          FIBA 3x3 Official Timing System • 10:00 Duration • 12s Shot Clock
+          {is5x5
+            ? 'FIBA 5x5 Official Timing • 4x10:00 Quarters • 24s Shot Clock'
+            : 'FIBA 3x3 Official Timing System • 10:00 Duration • 12s Shot Clock'}
         </div>
-        <div className="text-orange-500 font-bold">
-          HOOPSCORE ARENA DISPLAY SYSTEM
+        <div className={is5x5 ? 'text-blue-500 font-bold' : 'text-orange-500 font-bold'}>
+          HOOPSCORE ARENA BROADCAST DISPLAY
         </div>
       </div>
     </div>

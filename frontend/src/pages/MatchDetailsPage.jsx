@@ -13,6 +13,8 @@ import {
   Shield,
   Activity,
   History,
+  ArrowRightLeft,
+  FastForward,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -62,6 +64,7 @@ const MatchDetailsPage = () => {
   }
 
   const isCompleted = match.status === 'COMPLETED';
+  const is5x5 = match.matchType === '5x5';
   const playerStatsA = (match.playerStats || []).filter((s) => s.team === 'A');
   const playerStatsB = (match.playerStats || []).filter((s) => s.team === 'B');
   const events = match.events || [];
@@ -89,10 +92,22 @@ const MatchDetailsPage = () => {
       {/* Official Match Banner */}
       <div className="p-6 sm:p-10 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl relative overflow-hidden">
         <div className="text-center mb-6">
-          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-orange-400 bg-orange-500/10 px-3 py-1 rounded-full border border-orange-500/30">
-            {match.tournamentId?.name || 'Official FIBA 3x3 Match'}
-          </span>
-          <h1 className="text-2xl sm:text-4xl font-black text-white mt-2">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span
+              className={`text-xs font-mono font-black uppercase tracking-wider px-3 py-1 rounded-full border ${
+                is5x5
+                  ? 'text-blue-400 bg-blue-500/10 border-blue-500/30'
+                  : 'text-orange-400 bg-orange-500/10 border-orange-500/30'
+              }`}
+            >
+              🏀 {is5x5 ? 'BASKETBALL 5x5' : 'BASKETBALL 3x3'} OFFICIAL REPORT
+            </span>
+            <span className="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-0.5 rounded border border-slate-700">
+              {is5x5 ? '4 Quarters (10:00)' : '10:00 Regulation'}
+            </span>
+          </div>
+
+          <h1 className="text-2xl sm:text-4xl font-black text-white mt-1">
             {match.matchName}
           </h1>
           <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-mono text-slate-400 mt-2">
@@ -108,7 +123,7 @@ const MatchDetailsPage = () => {
             <span>•</span>
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
-              Target: {match.targetScore || 21} PTS
+              {match.targetScore ? `Target: ${match.targetScore} PTS` : '4 Quarters'}
             </span>
           </div>
         </div>
@@ -155,12 +170,31 @@ const MatchDetailsPage = () => {
             </div>
           </div>
         </div>
+
+        {/* 5x5 Quarter Scores Table */}
+        {is5x5 && match.periodScores && match.periodScores.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-slate-800/80 max-w-md mx-auto">
+            <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 text-center mb-2">
+              Quarter Scoring Breakdown
+            </h4>
+            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 text-center text-xs font-mono">
+              {match.periodScores.map((ps) => (
+                <div key={ps.period} className="p-2 rounded-xl bg-slate-950/60 border border-slate-800">
+                  <span className="text-cyan-400 font-bold block">{ps.period}</span>
+                  <span className="text-white font-digital font-bold text-sm">
+                    {ps.scoreA} - {ps.scoreB}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Official Box Score Tables */}
       <div className="space-y-6">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <Activity className="w-5 h-5 text-orange-400" /> Official Player Box Scores
+          <Activity className="w-5 h-5 text-orange-400" /> Official Player Box Scores ({match.matchType || '3x3'})
         </h2>
 
         {/* Team A Table */}
@@ -184,9 +218,11 @@ const MatchDetailsPage = () => {
                 <tr className="border-b border-slate-800 text-slate-400 font-mono text-[11px] uppercase">
                   <th className="py-2.5 px-3">#</th>
                   <th className="py-2.5 px-3">Player</th>
+                  <th className="py-2.5 px-2 text-center">Role</th>
                   <th className="py-2.5 px-2 text-center font-bold text-orange-400">PTS</th>
                   <th className="py-2.5 px-2 text-center">1PT</th>
                   <th className="py-2.5 px-2 text-center">2PT</th>
+                  {is5x5 && <th className="py-2.5 px-2 text-center text-blue-400">3PT</th>}
                   <th className="py-2.5 px-2 text-center">REB</th>
                   <th className="py-2.5 px-2 text-center">AST</th>
                   <th className="py-2.5 px-2 text-center">STL</th>
@@ -199,11 +235,25 @@ const MatchDetailsPage = () => {
                   <tr key={p.playerId} className="hover:bg-slate-800/30">
                     <td className="py-2.5 px-3 font-bold text-amber-400">#{p.jerseyNumber}</td>
                     <td className="py-2.5 px-3 font-sans font-bold text-white">{p.playerName}</td>
+                    <td className="py-2.5 px-2 text-center">
+                      <span
+                        className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border ${
+                          p.isStarter
+                            ? 'bg-orange-950/60 text-orange-400 border-orange-800'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        {p.isStarter ? 'Starter' : 'Sub'}
+                      </span>
+                    </td>
                     <td className="py-2.5 px-2 text-center font-bold text-orange-400 font-digital text-base">
                       {p.points}
                     </td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.onePoints}</td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.twoPoints}</td>
+                    {is5x5 && (
+                      <td className="py-2.5 px-2 text-center text-blue-400 font-bold">{p.threePoints || 0}</td>
+                    )}
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.rebounds}</td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.assists}</td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.steals}</td>
@@ -237,9 +287,11 @@ const MatchDetailsPage = () => {
                 <tr className="border-b border-slate-800 text-slate-400 font-mono text-[11px] uppercase">
                   <th className="py-2.5 px-3">#</th>
                   <th className="py-2.5 px-3">Player</th>
+                  <th className="py-2.5 px-2 text-center">Role</th>
                   <th className="py-2.5 px-2 text-center font-bold text-orange-400">PTS</th>
                   <th className="py-2.5 px-2 text-center">1PT</th>
                   <th className="py-2.5 px-2 text-center">2PT</th>
+                  {is5x5 && <th className="py-2.5 px-2 text-center text-blue-400">3PT</th>}
                   <th className="py-2.5 px-2 text-center">REB</th>
                   <th className="py-2.5 px-2 text-center">AST</th>
                   <th className="py-2.5 px-2 text-center">STL</th>
@@ -252,11 +304,25 @@ const MatchDetailsPage = () => {
                   <tr key={p.playerId} className="hover:bg-slate-800/30">
                     <td className="py-2.5 px-3 font-bold text-cyan-400">#{p.jerseyNumber}</td>
                     <td className="py-2.5 px-3 font-sans font-bold text-white">{p.playerName}</td>
+                    <td className="py-2.5 px-2 text-center">
+                      <span
+                        className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border ${
+                          p.isStarter
+                            ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        {p.isStarter ? 'Starter' : 'Sub'}
+                      </span>
+                    </td>
                     <td className="py-2.5 px-2 text-center font-bold text-orange-400 font-digital text-base">
                       {p.points}
                     </td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.onePoints}</td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.twoPoints}</td>
+                    {is5x5 && (
+                      <td className="py-2.5 px-2 text-center text-blue-400 font-bold">{p.threePoints || 0}</td>
+                    )}
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.rebounds}</td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.assists}</td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.steals}</td>
@@ -297,6 +363,10 @@ const MatchDetailsPage = () => {
                         ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                         : ev.type === 'FOUL'
                         ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        : ev.type === 'SUBSTITUTION'
+                        ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                        : ev.type === 'PERIOD_START' || ev.type === 'PERIOD_END'
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                         : 'bg-slate-800 text-slate-300'
                     }`}
                   >

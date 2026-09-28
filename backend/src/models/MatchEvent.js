@@ -19,12 +19,15 @@ const matchEventSchema = new mongoose.Schema(
         'TIMER_START',
         'TIMER_PAUSE',
         'SHOT_CLOCK_RESET',
+        'SUBSTITUTION',
+        'PERIOD_END',
+        'PERIOD_START',
         'REBOUND',
         'ASSIST',
         'STEAL',
         'BLOCK',
         'MATCH_END',
-        'UNDO'
+        'UNDO',
       ],
     },
     team: {
@@ -44,6 +47,20 @@ const matchEventSchema = new mongoose.Schema(
     jerseyNumber: {
       type: Number,
       default: null,
+    },
+    playerOut: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Player',
+      default: null,
+    },
+    playerIn: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Player',
+      default: null,
+    },
+    period: {
+      type: String,
+      default: '',
     },
     points: {
       type: Number,

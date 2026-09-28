@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Sparkles,
   ExternalLink,
+  Flame,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -21,6 +22,7 @@ const MatchHistoryPage = () => {
   const [tournaments, setTournaments] = useState([]);
 
   const [search, setSearch] = useState('');
+  const [selectedFormat, setSelectedFormat] = useState(''); // '3x3', '5x5', or ''
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('');
   const [selectedTournament, setSelectedTournament] = useState('');
@@ -34,7 +36,7 @@ const MatchHistoryPage = () => {
 
   useEffect(() => {
     fetchMatches();
-  }, [selectedStatus, selectedTeam, selectedTournament]);
+  }, [selectedFormat, selectedStatus, selectedTeam, selectedTournament]);
 
   const fetchFilters = async () => {
     try {
@@ -51,6 +53,7 @@ const MatchHistoryPage = () => {
       setLoading(true);
       const params = {};
       if (search) params.search = search;
+      if (selectedFormat) params.matchType = selectedFormat;
       if (selectedStatus) params.status = selectedStatus;
       if (selectedTeam) params.teamId = selectedTeam;
       if (selectedTournament) params.tournamentId = selectedTournament;
@@ -77,63 +80,102 @@ const MatchHistoryPage = () => {
           <History className="w-8 h-8 text-orange-500" /> Match Archives & Results
         </h1>
         <p className="text-sm text-slate-400">
-          Official game records, chronological box scores, and tournament archives
+          Official game records, chronological box scores, and tournament archives for 3x3 and 5x5 formats
         </p>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
-        <form onSubmit={handleSearchSubmit} className="relative flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by match or team..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500"
-          />
-        </form>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Status Filter */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500"
+      <div className="p-4 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-3">
+        {/* Quick Format Filter Tabs */}
+        <div className="flex items-center gap-2 pb-2 border-b border-slate-800/80">
+          <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mr-1">
+            Format:
+          </span>
+          <button
+            onClick={() => setSelectedFormat('')}
+            className={`px-3 py-1 rounded-xl text-xs font-mono font-bold transition-all ${
+              selectedFormat === ''
+                ? 'bg-orange-500 text-white shadow-md'
+                : 'bg-slate-800/80 text-slate-400 hover:text-white'
+            }`}
           >
-            <option value="">All Statuses</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="LIVE">Live Now</option>
-            <option value="SCHEDULED">Upcoming Scheduled</option>
-          </select>
-
-          {/* Tournament Filter */}
-          <select
-            value={selectedTournament}
-            onChange={(e) => setSelectedTournament(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500 max-w-[170px]"
+            All Formats
+          </button>
+          <button
+            onClick={() => setSelectedFormat('3x3')}
+            className={`px-3 py-1 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1 ${
+              selectedFormat === '3x3'
+                ? 'bg-orange-500 text-white shadow-md'
+                : 'bg-slate-800/80 text-slate-400 hover:text-white'
+            }`}
           >
-            <option value="">All Tournaments</option>
-            {tournaments.map((t) => (
-              <option key={t._id} value={t._id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Team Filter */}
-          <select
-            value={selectedTeam}
-            onChange={(e) => setSelectedTeam(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500 max-w-[150px]"
+            <span>🏀 3x3 Basketball</span>
+          </button>
+          <button
+            onClick={() => setSelectedFormat('5x5')}
+            className={`px-3 py-1 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1 ${
+              selectedFormat === '5x5'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-slate-800/80 text-slate-400 hover:text-white'
+            }`}
           >
-            <option value="">All Teams</option>
-            {teams.map((t) => (
-              <option key={t._id} value={t._id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+            <span>🏀 5x5 Basketball</span>
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <form onSubmit={handleSearchSubmit} className="relative flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by match title or team name..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500"
+            />
+          </form>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status Filter */}
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500"
+            >
+              <option value="">All Statuses</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="LIVE">Live Now</option>
+              <option value="SCHEDULED">Upcoming Scheduled</option>
+            </select>
+
+            {/* Tournament Filter */}
+            <select
+              value={selectedTournament}
+              onChange={(e) => setSelectedTournament(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500 max-w-[170px]"
+            >
+              <option value="">All Tournaments</option>
+              {tournaments.map((t) => (
+                <option key={t._id} value={t._id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Team Filter */}
+            <select
+              value={selectedTeam}
+              onChange={(e) => setSelectedTeam(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500 max-w-[150px]"
+            >
+              <option value="">All Teams</option>
+              {teams.map((t) => (
+                <option key={t._id} value={t._id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -147,25 +189,41 @@ const MatchHistoryPage = () => {
           {matches.map((m) => {
             const isCompleted = m.status === 'COMPLETED';
             const isLive = m.status === 'LIVE' || m.status === 'PAUSED';
+            const is5x5 = m.matchType === '5x5';
 
             return (
               <div
                 key={m._id}
-                className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between group"
+                className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between group shadow-xl"
               >
                 <div>
-                  <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
-                    <span
-                      className={`px-2 py-0.5 rounded font-bold uppercase ${
-                        isLive
-                          ? 'bg-red-500/20 text-red-400 animate-pulse'
-                          : isCompleted
-                          ? 'bg-slate-800 text-emerald-400'
-                          : 'bg-slate-800 text-slate-400'
-                      }`}
-                    >
-                      {m.status}
-                    </span>
+                  <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2.5">
+                    <div className="flex items-center gap-1.5">
+                      {/* Format Badge */}
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
+                          is5x5
+                            ? 'bg-blue-950/90 text-blue-400 border-blue-800'
+                            : 'bg-orange-950/90 text-orange-400 border-orange-800'
+                        }`}
+                      >
+                        {is5x5 ? '5x5' : '3x3'}
+                      </span>
+
+                      {/* Status Badge */}
+                      <span
+                        className={`px-2 py-0.5 rounded font-bold uppercase ${
+                          isLive
+                            ? 'bg-red-500/20 text-red-400 animate-pulse'
+                            : isCompleted
+                            ? 'bg-slate-800 text-emerald-400'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {m.status}
+                      </span>
+                    </div>
+
                     <span>
                       {new Date(m.scheduledDate || m.createdAt).toLocaleDateString()}
                     </span>
@@ -175,8 +233,8 @@ const MatchHistoryPage = () => {
                     {m.matchName}
                   </h3>
 
-                  <p className="text-xs text-slate-400 font-mono mb-4">
-                    {m.tournamentId?.name || 'Exhibition 3x3'} • {m.venue || 'Center Court'}
+                  <p className="text-xs text-slate-400 font-mono mb-3">
+                    {m.tournamentId?.name || (is5x5 ? '5x5 Classic' : '3x3 Circuit')} • {m.venue || 'Center Court'}
                   </p>
 
                   {/* Scoreboard display */}
@@ -204,6 +262,17 @@ const MatchHistoryPage = () => {
                     </div>
                   </div>
 
+                  {/* 5x5 Quarters or Winner Tag */}
+                  {is5x5 && m.periodScores && m.periodScores.length > 0 && (
+                    <div className="flex items-center justify-center gap-3 text-[10px] font-mono text-slate-400 pt-1">
+                      {m.periodScores.map((ps) => (
+                        <span key={ps.period}>
+                          {ps.period}: {ps.scoreA}-{ps.scoreB}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {isCompleted && (
                     <div className="text-center mt-2 text-[11px] font-mono text-emerald-400 flex items-center justify-center gap-1">
                       <Sparkles className="w-3.5 h-3.5" />
@@ -224,7 +293,7 @@ const MatchHistoryPage = () => {
                     to={`/matches/${m._id}`}
                     className="w-full py-2 rounded-xl bg-slate-800 hover:bg-orange-600 text-slate-300 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-all"
                   >
-                    <span>{isCompleted ? 'View Official Box Score' : 'Match Preview'}</span>
+                    <span>{isCompleted ? 'View Official Box Score' : 'Match Staging / Preview'}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Link>
                 </div>

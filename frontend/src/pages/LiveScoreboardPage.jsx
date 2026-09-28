@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -10,6 +10,7 @@ import ShotClock from '../components/Scoreboard/ShotClock';
 import TeamScoreCard from '../components/Scoreboard/TeamScoreCard';
 import PossessionArrow from '../components/Scoreboard/PossessionArrow';
 import QuickScorerModal from '../components/Scoreboard/QuickScorerModal';
+import SubstitutionModal from '../components/Scoreboard/SubstitutionModal';
 import LivePlayerStats from '../components/Scoreboard/LivePlayerStats';
 import Toast from '../components/Common/Toast';
 
@@ -21,13 +22,12 @@ import {
   CheckCircle,
   Tv,
   Trophy,
-  History,
-  Maximize2,
   Volume2,
   VolumeX,
-  AlertTriangle,
   ArrowLeft,
-  Flame,
+  ArrowRightLeft,
+  FastForward,
+  Flag,
 } from 'lucide-react';
 
 const LiveScoreboardPage = () => {
@@ -46,6 +46,12 @@ const LiveScoreboardPage = () => {
     isOpen: false,
     team: 'A',
     points: 1,
+  });
+
+  // Substitution Modal State
+  const [subModal, setSubModal] = useState({
+    isOpen: false,
+    team: 'A',
   });
 
   // Fetch initial match state
@@ -73,9 +79,6 @@ const LiveScoreboardPage = () => {
     if (socket) {
       socket.on('match-updated', ({ match: updatedMatch, latestEvent }) => {
         setMatch(updatedMatch);
-        if (latestEvent?.metadata?.description) {
-          // Toast subtle notification for scorer if needed
-        }
       });
 
       socket.on('buzzer-alert', ({ type, details }) => {
@@ -84,7 +87,10 @@ const LiveScoreboardPage = () => {
           setToast({ message: 'SHOT CLOCK EXPIRED!', type: 'warning' });
         } else if (type === 'GAME_END') {
           playGameEndHorn();
-          setToast({ message: 'GAME OVER! Target score reached.', type: 'info' });
+          setToast({ message: details?.winner ? `GAME OVER! Winner: Team ${details.winner}` : 'GAME OVER!', type: 'info' });
+        } else if (type === 'PERIOD_END') {
+          playGameEndHorn();
+          setToast({ message: `${details?.period || 'Quarter'} Ended!`, type: 'info' });
         } else if (type === 'WHISTLE') {
           playWhistle();
         }
@@ -124,12 +130,16 @@ const LiveScoreboardPage = () => {
   };
 
   const handleResetTimer = async () => {
-    if (!window.confirm('Reset game timer back to full duration?')) return;
+    const defaultSecs = match.matchType === '5x5'
+      ? (match.settings?.quarterDuration || 600)
+      : (match.gameDuration || 600);
+
+    if (!window.confirm(`Reset period clock back to ${Math.floor(defaultSecs / 60)}:00?`)) return;
     try {
       playClick();
-      const res = await matchApi.resetTimer(id, match.gameDuration || 600);
+      const res = await matchApi.resetTimer(id, defaultSecs);
       if (res?.data) setMatch(res.data);
-      setToast({ message: 'Timer reset to 10:00', type: 'info' });
+      setToast({ message: `Clock reset to ${Math.floor(defaultSecs / 60)}:00`, type: 'info' });
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
     }
@@ -155,7 +165,6 @@ const LiveScoreboardPage = () => {
         points,
       });
     } else {
-      // Direct deduction for -1 or -2
       executeScoreUpdate(team, points, null);
     }
   };
@@ -210,6 +219,42 @@ const LiveScoreboardPage = () => {
     }
   };
 
+  // Substitution Handler
+  const handlePerformSubstitution = async (team, playerOutId, playerInId) => {
+    try {
+      playClick();
+      const res = await matchApi.substitute(id, { team, playerOutId, playerInId });
+      if (res?.data) setMatch(res.data);
+      setToast({ message: 'Substitution completed successfully!', type: 'success' });
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to substitute player', type: 'error' });
+    }
+  };
+
+  // Period / Quarter Controls for 5x5
+  const handleEndQuarter = async () => {
+    if (!window.confirm(`End current period (${match.currentPeriod || 'Quarter'})?`)) return;
+    try {
+      playGameEndHorn();
+      const res = await matchApi.controlPeriod(id, { action: 'END_QUARTER' });
+      if (res?.data) setMatch(res.data);
+      setToast({ message: `${match.currentPeriod || 'Quarter'} officially ended`, type: 'info' });
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to end quarter', type: 'error' });
+    }
+  };
+
+  const handleNextQuarter = async () => {
+    try {
+      playClick();
+      const res = await matchApi.controlPeriod(id, { action: 'NEXT_QUARTER' });
+      if (res?.data) setMatch(res.data);
+      setToast({ message: `Advanced to ${res.data?.currentPeriod}! Timer & fouls reset.`, type: 'success' });
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to advance quarter', type: 'error' });
+    }
+  };
+
   // Live Player Stat Tracker (+REB, +AST, +STL, +BLK)
   const handleRecordPlayerStat = async (playerId, statType, change) => {
     try {
@@ -236,7 +281,7 @@ const LiveScoreboardPage = () => {
 
   // End Match
   const handleEndMatch = async () => {
-    if (!window.confirm('Are you sure you want to end this match and save official statistics?')) {
+    if (!window.confirm('Are you sure you want to officially end this match and persist results?')) {
       return;
     }
 
@@ -270,6 +315,20 @@ const LiveScoreboardPage = () => {
   }
 
   const isCompleted = match.status === 'COMPLETED';
+  const is5x5 = match.matchType === '5x5';
+
+  // Active On-Court Players for Scorer Attribution Modal
+  const teamAStarters = match.teamA_roster?.starters?.length
+    ? match.teamA_roster.starters
+    : match.playersA || [];
+  const teamBStarters = match.teamB_roster?.starters?.length
+    ? match.teamB_roster.starters
+    : match.playersB || [];
+
+  const teamASubs = match.teamA_roster?.substitutes || [];
+  const teamBSubs = match.teamB_roster?.substitutes || [];
+
+  const activePlayersForModal = scorerModal.team === 'A' ? teamAStarters : teamBStarters;
 
   return (
     <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5">
@@ -285,6 +344,18 @@ const LiveScoreboardPage = () => {
           </Link>
           <div>
             <div className="flex items-center gap-2">
+              {/* Match Format Badge */}
+              <span
+                className={`text-[10px] font-mono font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                  is5x5
+                    ? 'bg-blue-950/90 text-blue-400 border-blue-800'
+                    : 'bg-orange-950/90 text-orange-400 border-orange-800'
+                }`}
+              >
+                🏀 {is5x5 ? 'BASKETBALL 5x5' : 'BASKETBALL 3x3'}
+              </span>
+
+              {/* Status Badge */}
               <span
                 className={`text-[10px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full border ${
                   isCompleted
@@ -296,18 +367,50 @@ const LiveScoreboardPage = () => {
               >
                 {match.status}
               </span>
-              <span className="text-xs text-white font-bold truncate max-w-[200px] sm:max-w-none">
+
+              {/* Period Indicator */}
+              <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                {match.currentPeriod || (is5x5 ? 'Q1' : 'REGULATION')}
+              </span>
+
+              <span className="text-xs text-white font-bold truncate max-w-[180px] sm:max-w-none">
                 {match.matchName}
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-mono">
-              Target: {match.targetScore || 21} PTS • Court: {match.venue || 'Center Court'}
+
+            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+              Venue: {match.venue || 'Center Court'} • Shot Clock:{' '}
+              {match.settings?.shotClock || match.shotClockDuration || (is5x5 ? 24 : 12)}s
+              {match.targetScore ? ` • Target: ${match.targetScore} PTS` : ' • 4 Quarters'}
             </p>
           </div>
         </div>
 
         {/* Console Action Links */}
         <div className="flex items-center gap-2">
+          {/* Quick Substitution Button for Scorer */}
+          {isScorer && !isCompleted && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setSubModal({ isOpen: true, team: 'A' })}
+                className="px-2.5 py-1.5 rounded-xl bg-orange-950/80 hover:bg-orange-900 text-orange-300 text-xs font-mono font-bold border border-orange-800/80 flex items-center gap-1.5 transition-all shadow-sm"
+                title={`Substitute ${match.teamA?.shortName || 'Team A'} players`}
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>SUB {match.teamA?.shortName || 'A'}</span>
+              </button>
+
+              <button
+                onClick={() => setSubModal({ isOpen: true, team: 'B' })}
+                className="px-2.5 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-xs font-mono font-bold border border-cyan-800/80 flex items-center gap-1.5 transition-all shadow-sm"
+                title={`Substitute ${match.teamB?.shortName || 'Team B'} players`}
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>SUB {match.teamB?.shortName || 'B'}</span>
+              </button>
+            </div>
+          )}
+
           {/* Sound Toggle */}
           <button
             onClick={toggleSound}
@@ -367,6 +470,21 @@ const LiveScoreboardPage = () => {
           </div>
         )}
 
+        {/* 5x5 Quarter Summary Breakdown Bar */}
+        {is5x5 && match.periodScores && match.periodScores.length > 0 && (
+          <div className="mb-5 p-3 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-center justify-center gap-6 text-xs font-mono">
+            <span className="text-slate-500 uppercase font-bold">Quarter Scores:</span>
+            {match.periodScores.map((ps) => (
+              <div key={ps.period} className="flex items-center gap-2">
+                <span className="text-cyan-400 font-bold">{ps.period}:</span>
+                <span className="text-white font-digital font-bold text-sm">
+                  {ps.scoreA} - {ps.scoreB}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* 3-Column Arena Scoreboard Grid: Team A | Center Timer & Shot Clock | Team B */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
           {/* Team A Score Card */}
@@ -377,13 +495,15 @@ const LiveScoreboardPage = () => {
               score={match.scoreA}
               fouls={match.foulsA}
               timeouts={match.timeoutsA}
-              foulLimit={match.foulLimit || 7}
+              foulLimit={match.foulLimit || (is5x5 ? 5 : 7)}
+              matchType={match.matchType || '3x3'}
               isPossession={match.possession === 'A'}
               isScorer={isScorer && !isCompleted}
               onScoreClick={handleOpenScorerModal}
               onAddFoul={handleFoulAction}
               onSubFoul={handleFoulAction}
               onCallTimeout={handleCallTimeout}
+              onOpenSubstitution={() => setSubModal({ isOpen: true, team: 'A' })}
             />
           </div>
 
@@ -401,7 +521,9 @@ const LiveScoreboardPage = () => {
             {/* Game Clock Display */}
             <div className="p-4 rounded-3xl bg-black/60 border border-slate-800 shadow-2xl w-full flex flex-col items-center">
               <span className="text-[10px] font-mono uppercase font-bold text-slate-400 tracking-widest mb-1">
-                GAME CLOCK (FIBA 3X3)
+                {is5x5
+                  ? `GAME CLOCK (${match.currentPeriod || 'Q1'})`
+                  : 'GAME CLOCK (FIBA 3X3)'}
               </span>
               <DigitalTimer
                 remainingTime={match.remainingTime}
@@ -409,19 +531,25 @@ const LiveScoreboardPage = () => {
                 timerStartedAt={match.timerStartedAt}
                 onExpire={() => {
                   playGameEndHorn();
-                  setToast({ message: 'REGULATION TIME EXPIRED!', type: 'warning' });
+                  setToast({
+                    message: is5x5 ? `${match.currentPeriod || 'Quarter'} Time Expired!` : 'REGULATION TIME EXPIRED!',
+                    type: 'warning',
+                  });
                 }}
               />
             </div>
 
-            {/* Shot Clock (12s) Display */}
+            {/* Shot Clock (12s for 3x3, 24s for 5x5) */}
             <div className="w-full max-w-xs">
               <ShotClock
                 shotClockRemaining={match.shotClockRemaining}
                 shotClockRunning={match.shotClockRunning}
                 shotClockStartedAt={match.shotClockStartedAt}
-                onReset12={() => handleShotClockAction('RESET_12')}
-                onReset2={() => handleShotClockAction('RESET_2')}
+                matchType={match.matchType || '3x3'}
+                onResetFull={() => handleShotClockAction('RESET_FULL')}
+                onResetShort={() => handleShotClockAction('RESET_SHORT')}
+                onReset12={() => handleShotClockAction(is5x5 ? 'RESET_24' : 'RESET_12')}
+                onReset2={() => handleShotClockAction(is5x5 ? 'RESET_14' : 'RESET_2')}
                 onTogglePause={() =>
                   handleShotClockAction(match.shotClockRunning ? 'PAUSE' : 'RESUME')
                 }
@@ -441,21 +569,23 @@ const LiveScoreboardPage = () => {
               score={match.scoreB}
               fouls={match.foulsB}
               timeouts={match.timeoutsB}
-              foulLimit={match.foulLimit || 7}
+              foulLimit={match.foulLimit || (is5x5 ? 5 : 7)}
+              matchType={match.matchType || '3x3'}
               isPossession={match.possession === 'B'}
               isScorer={isScorer && !isCompleted}
               onScoreClick={handleOpenScorerModal}
               onAddFoul={handleFoulAction}
               onSubFoul={handleFoulAction}
               onCallTimeout={handleCallTimeout}
+              onOpenSubstitution={() => setSubModal({ isOpen: true, team: 'B' })}
             />
           </div>
         </div>
 
-        {/* Scorer Action Control Panel (START, PAUSE, RESET, UNDO, END MATCH) */}
+        {/* Scorer Action Control Panel (START, PAUSE, RESET, QUARTER CONTROLS, UNDO, END MATCH) */}
         {isScorer && !isCompleted && (
           <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-2xl">
-            {/* Clock Controls */}
+            {/* Clock & Quarter Controls */}
             <div className="flex flex-wrap items-center gap-2">
               {!match.timerRunning ? (
                 <button
@@ -476,10 +606,30 @@ const LiveScoreboardPage = () => {
               <button
                 onClick={handleResetTimer}
                 className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs border border-slate-700 active:scale-95 transition-all flex items-center gap-1"
-                title="Reset game clock to default 10:00"
+                title="Reset current period clock"
               >
-                <RotateCcw className="w-3.5 h-3.5" /> RESET 10:00
+                <RotateCcw className="w-3.5 h-3.5" /> RESET CLOCK
               </button>
+
+              {/* 5x5 Period/Quarter Controls */}
+              {is5x5 && (
+                <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-800">
+                  <button
+                    onClick={handleEndQuarter}
+                    className="px-3 py-2.5 rounded-xl bg-indigo-950 hover:bg-indigo-900 text-indigo-300 font-mono font-bold text-xs border border-indigo-700/80 active:scale-95 transition-all flex items-center gap-1"
+                    title="End current quarter and store quarter score"
+                  >
+                    <Flag className="w-3.5 h-3.5" /> END QUARTER
+                  </button>
+                  <button
+                    onClick={handleNextQuarter}
+                    className="px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-mono font-bold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1"
+                    title="Advance to next quarter (Q1->Q2->Q3->Q4->OT)"
+                  >
+                    <FastForward className="w-3.5 h-3.5" /> NEXT QUARTER
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Undo & End Match Operations */}
@@ -487,7 +637,7 @@ const LiveScoreboardPage = () => {
               <button
                 onClick={handleUndo}
                 className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs sm:text-sm border border-amber-500/30 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm"
-                title="Undo last recorded score, foul, or possession change"
+                title="Undo last recorded score, foul, substitution, or period"
               >
                 <Undo2 className="w-4 h-4" /> UNDO LAST ACTION
               </button>
@@ -510,16 +660,27 @@ const LiveScoreboardPage = () => {
         onRecordStat={handleRecordPlayerStat}
       />
 
-      {/* Scorer Player Attribution Modal */}
+      {/* Scorer Player Attribution Modal (Active court players only) */}
       <QuickScorerModal
         isOpen={scorerModal.isOpen}
         team={scorerModal.team}
         teamName={scorerModal.team === 'A' ? match.teamA?.name : match.teamB?.name}
         teamColor={scorerModal.team === 'A' ? match.teamA?.primaryColor : match.teamB?.primaryColor}
         points={scorerModal.points}
-        players={scorerModal.team === 'A' ? match.playersA : match.playersB}
+        players={activePlayersForModal}
         onSelectScorer={(playerId) => executeScoreUpdate(scorerModal.team, scorerModal.points, playerId)}
         onClose={() => setScorerModal({ isOpen: false, team: 'A', points: 1 })}
+      />
+
+      {/* In-Game Player Substitution Modal */}
+      <SubstitutionModal
+        isOpen={subModal.isOpen}
+        team={subModal.team}
+        teamData={subModal.team === 'A' ? match.teamA : match.teamB}
+        starters={subModal.team === 'A' ? teamAStarters : teamBStarters}
+        substitutes={subModal.team === 'A' ? teamASubs : teamBSubs}
+        onSubstitute={handlePerformSubstitution}
+        onClose={() => setSubModal({ isOpen: false, team: 'A' })}
       />
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

@@ -44,6 +44,16 @@ const teamSchema = new mongoose.Schema(
       losses: { type: Number, default: 0 },
       pointsFor: { type: Number, default: 0 },
       pointsAgainst: { type: Number, default: 0 },
+      matches3x3: {
+        played: { type: Number, default: 0 },
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+      },
+      matches5x5: {
+        played: { type: Number, default: 0 },
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+      },
     },
   },
   {

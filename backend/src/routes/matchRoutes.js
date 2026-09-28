@@ -18,6 +18,8 @@ const {
   togglePossession,
   callTimeout,
   recordPlayerStat,
+  substitutePlayer,
+  controlPeriod,
   undoLastAction,
   endMatch,
 } = require('../controllers/liveMatchController');
@@ -47,6 +49,8 @@ router.post('/:id/foul', protect, authorize('admin', 'scorer'), recordFoul);
 router.post('/:id/possession', protect, authorize('admin', 'scorer'), togglePossession);
 router.post('/:id/timeout', protect, authorize('admin', 'scorer'), callTimeout);
 router.post('/:id/player-stats', protect, authorize('admin', 'scorer'), recordPlayerStat);
+router.post('/:id/substitute', protect, authorize('admin', 'scorer'), substitutePlayer);
+router.post('/:id/period', protect, authorize('admin', 'scorer'), controlPeriod);
 router.post('/:id/undo', protect, authorize('admin', 'scorer'), undoLastAction);
 router.post('/:id/end', protect, authorize('admin', 'scorer'), endMatch);
 

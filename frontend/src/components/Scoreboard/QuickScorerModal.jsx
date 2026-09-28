@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, UserCheck, Flame } from 'lucide-react';
+import { X, UserCheck, Flame, ShieldAlert } from 'lucide-react';
 
 const QuickScorerModal = ({
   isOpen = false,
@@ -7,15 +7,15 @@ const QuickScorerModal = ({
   teamName = 'Team',
   teamColor = '#FF5722',
   points = 1,
-  players = [],
+  players = [], // Active on-court starters
   onSelectScorer = null,
   onClose = null,
 }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div
           className="p-4 flex items-center justify-between border-b border-slate-800"
@@ -27,7 +27,7 @@ const QuickScorerModal = ({
             </div>
             <div>
               <h3 className="font-bold text-white text-base leading-tight">
-                Select Scorer — {points > 0 ? `+${points}` : points} PTS
+                Select Active Scorer — {points > 0 ? `+${points}` : points} PTS
               </h3>
               <p className="text-xs text-slate-400">{teamName}</p>
             </div>
@@ -42,9 +42,14 @@ const QuickScorerModal = ({
 
         {/* Player Roster Selection */}
         <div className="p-4 space-y-2">
-          <p className="text-xs font-mono uppercase text-slate-400 font-bold mb-2">
-            Who scored the {points === 2 ? '2-pointer' : 'point'}?
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-mono uppercase text-slate-400 font-bold">
+              Who scored the {points === 3 ? '3-pointer' : points === 2 ? '2-pointer' : 'point'}?
+            </p>
+            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/80">
+              Active On-Court Players Only
+            </span>
+          </div>
 
           <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
             {players && players.length > 0 ? (
@@ -77,7 +82,7 @@ const QuickScorerModal = ({
                 );
               })
             ) : (
-              <p className="text-sm text-slate-400 text-center py-4">No roster players available</p>
+              <p className="text-sm text-slate-400 text-center py-4">No active on-court players found</p>
             )}
           </div>
 

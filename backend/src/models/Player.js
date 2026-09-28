@@ -35,11 +35,13 @@ const playerSchema = new mongoose.Schema(
       points: { type: Number, default: 0 },
       onePoints: { type: Number, default: 0 },
       twoPoints: { type: Number, default: 0 },
+      threePoints: { type: Number, default: 0 }, // For 5x5 basketball
       rebounds: { type: Number, default: 0 },
       assists: { type: Number, default: 0 },
       steals: { type: Number, default: 0 },
       blocks: { type: Number, default: 0 },
       fouls: { type: Number, default: 0 },
+      minutes: { type: Number, default: 0 },
     },
   },
   {
