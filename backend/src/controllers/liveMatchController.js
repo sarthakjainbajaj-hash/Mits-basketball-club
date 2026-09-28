@@ -1,0 +1,757 @@
+const Match = require('../models/Match');
+const MatchEvent = require('../models/MatchEvent');
+const Player = require('../models/Player');
+const Team = require('../models/Team');
+const { broadcastMatchState, broadcastBuzzerAlert } = require('../sockets/matchSocket');
+
+// Format seconds into MM:SS display
+const formatTime = (seconds) => {
+  const mins = Math.floor(Math.max(0, seconds) / 60);
+  const secs = Math.floor(Math.max(0, seconds) % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+// Helper to broadcast match update with populated fields
+const broadcastState = async (req, match, latestEvent = null) => {
+  const io = req.app.get('io');
+  if (!io) return;
+
+  const populatedMatch = await Match.findById(match._id)
+    .populate('teamA', 'name shortName logo primaryColor secondaryColor')
+    .populate('teamB', 'name shortName logo primaryColor secondaryColor')
+    .populate('tournamentId', 'name venue')
+    .populate('playersA.player', 'name jerseyNumber position')
+    .populate('playersB.player', 'name jerseyNumber position');
+
+  // Compute live remaining time
+  const responseData = populatedMatch.toObject();
+  responseData.remainingTime = populatedMatch.getCurrentRemainingTime();
+  responseData.shotClockRemaining = populatedMatch.getCurrentShotClockRemaining();
+
+  broadcastMatchState(io, match._id.toString(), responseData, latestEvent);
+};
+
+// @desc    Start / Resume live match timer
+// @route   POST /api/matches/:id/start
+// @access  Private (Admin, Scorer)
+const startMatch = async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    if (match.status === 'COMPLETED') {
+      return res.status(400).json({ success: false, message: 'Cannot start an already completed match' });
+    }
+
+    const now = Date.now();
+    match.status = 'LIVE';
+    if (!match.startedAt) {
+      match.startedAt = new Date();
+    }
+
+    match.timerRunning = true;
+    match.timerStartedAt = now;
+    match.shotClockRunning = true;
+    match.shotClockStartedAt = now;
+    match.pausedAt = null;
+
+    await match.save();
+
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'TIMER_START',
+      gameTime: formatTime(match.remainingTime),
+      metadata: { description: 'Game timer and shot clock started' },
+    });
+
+    await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: match, event });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Pause live match timer
+// @route   POST /api/matches/:id/pause
+// @access  Private (Admin, Scorer)
+const pauseMatch = async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    if (match.timerRunning && match.timerStartedAt) {
+      const elapsed = (Date.now() - match.timerStartedAt) / 1000;
+      match.remainingTime = Math.max(0, Math.round((match.remainingTime - elapsed) * 10) / 10);
+    }
+
+    if (match.shotClockRunning && match.shotClockStartedAt) {
+      const scElapsed = (Date.now() - match.shotClockStartedAt) / 1000;
+      match.shotClockRemaining = Math.max(0, Math.round((match.shotClockRemaining - scElapsed) * 10) / 10);
+    }
+
+    match.timerRunning = false;
+    match.timerStartedAt = null;
+    match.shotClockRunning = false;
+    match.shotClockStartedAt = null;
+    match.pausedAt = new Date();
+    if (match.status === 'LIVE') {
+      match.status = 'PAUSED';
+    }
+
+    await match.save();
+
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'TIMER_PAUSE',
+      gameTime: formatTime(match.remainingTime),
+      metadata: { description: 'Game timer paused' },
+    });
+
+    await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: match, event });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Reset game timer
+// @route   POST /api/matches/:id/reset-timer
+// @access  Private (Admin, Scorer)
+const resetTimer = async (req, res) => {
+  try {
+    const { duration } = req.body;
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    const newDuration = duration !== undefined ? Number(duration) : match.gameDuration;
+    match.remainingTime = newDuration;
+    match.timerRunning = false;
+    match.timerStartedAt = null;
+
+    await match.save();
+    await broadcastState(req, match);
+    res.status(200).json({ success: true, data: match });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Shot clock controls (reset 12, reset 2, pause, resume)
+// @route   POST /api/matches/:id/shot-clock
+// @access  Private (Admin, Scorer)
+const controlShotClock = async (req, res) => {
+  try {
+    const { action, seconds } = req.body; // 'RESET_12', 'RESET_2', 'PAUSE', 'RESUME', 'SET'
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    const now = Date.now();
+
+    if (action === 'RESET_12') {
+      match.shotClockRemaining = 12;
+      match.shotClockStartedAt = match.timerRunning ? now : null;
+      match.shotClockRunning = match.timerRunning;
+    } else if (action === 'RESET_2') {
+      // Offensive rebound or technical reset
+      match.shotClockRemaining = 2;
+      match.shotClockStartedAt = match.timerRunning ? now : null;
+      match.shotClockRunning = match.timerRunning;
+    } else if (action === 'SET' && seconds !== undefined) {
+      match.shotClockRemaining = Number(seconds);
+      match.shotClockStartedAt = match.shotClockRunning ? now : null;
+    } else if (action === 'PAUSE') {
+      if (match.shotClockRunning && match.shotClockStartedAt) {
+        const scElapsed = (now - match.shotClockStartedAt) / 1000;
+        match.shotClockRemaining = Math.max(0, Math.round((match.shotClockRemaining - scElapsed) * 10) / 10);
+      }
+      match.shotClockRunning = false;
+      match.shotClockStartedAt = null;
+    } else if (action === 'RESUME') {
+      match.shotClockRunning = true;
+      match.shotClockStartedAt = now;
+    }
+
+    await match.save();
+
+    const io = req.app.get('io');
+    if (match.shotClockRemaining === 0) {
+      broadcastBuzzerAlert(io, match._id.toString(), 'SHOT_CLOCK', { message: 'Shot Clock Expired' });
+    }
+
+    await broadcastState(req, match);
+    res.status(200).json({ success: true, data: match });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update match score (+1, +2, -1, -2) with player attribution
+// @route   POST /api/matches/:id/score
+// @access  Private (Admin, Scorer)
+const updateScore = async (req, res) => {
+  try {
+    const { team, points, playerId } = req.body; // team: 'A' | 'B', points: 1 | 2 | -1 | -2
+
+    if (!['A', 'B'].includes(team) || points === undefined) {
+      return res.status(400).json({ success: false, message: 'Invalid team or points payload' });
+    }
+
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    if (match.status === 'COMPLETED') {
+      return res.status(400).json({ success: false, message: 'Cannot modify score on a completed match' });
+    }
+
+    const numPoints = Number(points);
+    const prevScoreA = match.scoreA;
+    const prevScoreB = match.scoreB;
+
+    let scorerPlayer = null;
+    let scorerName = `Team ${team}`;
+    let jerseyNum = null;
+
+    if (playerId) {
+      scorerPlayer = await Player.findById(playerId);
+      if (scorerPlayer) {
+        scorerName = scorerPlayer.name;
+        jerseyNum = scorerPlayer.jerseyNumber;
+      }
+    }
+
+    // Apply score change
+    if (team === 'A') {
+      match.scoreA = Math.max(0, match.scoreA + numPoints);
+    } else {
+      match.scoreB = Math.max(0, match.scoreB + numPoints);
+    }
+
+    // Update in-match player stats
+    if (playerId && match.playerStats) {
+      let statEntry = match.playerStats.find((s) => s.playerId.toString() === playerId.toString());
+      if (statEntry) {
+        statEntry.points = Math.max(0, statEntry.points + numPoints);
+        if (numPoints === 1) {
+          statEntry.onePoints = Math.max(0, statEntry.onePoints + 1);
+        } else if (numPoints === 2) {
+          statEntry.twoPoints = Math.max(0, statEntry.twoPoints + 1);
+        } else if (numPoints === -1 && statEntry.onePoints > 0) {
+          statEntry.onePoints = Math.max(0, statEntry.onePoints - 1);
+        } else if (numPoints === -2 && statEntry.twoPoints > 0) {
+          statEntry.twoPoints = Math.max(0, statEntry.twoPoints - 1);
+        }
+      } else if (scorerPlayer) {
+        match.playerStats.push({
+          playerId: scorerPlayer._id,
+          playerName: scorerPlayer.name,
+          jerseyNumber: scorerPlayer.jerseyNumber,
+          teamId: scorerPlayer.teamId,
+          team,
+          points: Math.max(0, numPoints),
+          onePoints: numPoints === 1 ? 1 : 0,
+          twoPoints: numPoints === 2 ? 1 : 0,
+          rebounds: 0,
+          assists: 0,
+          steals: 0,
+          blocks: 0,
+          fouls: 0,
+        });
+      }
+    }
+
+    // Create MatchEvent for undo and timeline
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'SCORE',
+      team,
+      playerId: scorerPlayer ? scorerPlayer._id : null,
+      playerName: scorerName,
+      jerseyNumber: jerseyNum,
+      points: numPoints,
+      gameTime: formatTime(match.getCurrentRemainingTime()),
+      metadata: {
+        prevScoreA,
+        prevScoreB,
+        newScoreA: match.scoreA,
+        newScoreB: match.scoreB,
+        description: `${scorerName} ${numPoints > 0 ? `+${numPoints}` : numPoints} PTS (${team === 'A' ? match.scoreA : match.scoreB})`,
+      },
+    });
+
+    // Check 3x3 Sudden Victory: Target score reached (default 21)
+    let autoCompleted = false;
+    const target = match.targetScore || 21;
+    if (match.scoreA >= target || match.scoreB >= target) {
+      match.status = 'COMPLETED';
+      match.endedAt = new Date();
+      match.timerRunning = false;
+      match.shotClockRunning = false;
+      match.winner = match.scoreA >= target ? 'A' : 'B';
+      match.winnerTeamId = match.scoreA >= target ? match.teamA : match.teamB;
+      match.finalScore = `${match.scoreA} - ${match.scoreB}`;
+      autoCompleted = true;
+
+      // Broadcast Game End Buzzer
+      const io = req.app.get('io');
+      broadcastBuzzerAlert(io, match._id.toString(), 'GAME_END', {
+        winner: match.winner,
+        finalScore: match.finalScore,
+      });
+    }
+
+    await match.save();
+    await broadcastState(req, match, event);
+
+    res.status(200).json({
+      success: true,
+      data: match,
+      event,
+      autoCompleted,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record team/player foul (+1, -1)
+// @route   POST /api/matches/:id/foul
+// @access  Private (Admin, Scorer)
+const recordFoul = async (req, res) => {
+  try {
+    const { team, change, playerId } = req.body; // change: 1 | -1
+
+    if (!['A', 'B'].includes(team) || change === undefined) {
+      return res.status(400).json({ success: false, message: 'Invalid team or foul change' });
+    }
+
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    const numChange = Number(change);
+    const prevFoulsA = match.foulsA;
+    const prevFoulsB = match.foulsB;
+
+    let foulerPlayer = null;
+    let foulerName = `Team ${team}`;
+    let jerseyNum = null;
+
+    if (playerId) {
+      foulerPlayer = await Player.findById(playerId);
+      if (foulerPlayer) {
+        foulerName = foulerPlayer.name;
+        jerseyNum = foulerPlayer.jerseyNumber;
+      }
+    }
+
+    if (team === 'A') {
+      match.foulsA = Math.max(0, match.foulsA + numChange);
+    } else {
+      match.foulsB = Math.max(0, match.foulsB + numChange);
+    }
+
+    // Update in-match player stats for fouls
+    if (playerId && match.playerStats) {
+      let statEntry = match.playerStats.find((s) => s.playerId.toString() === playerId.toString());
+      if (statEntry) {
+        statEntry.fouls = Math.max(0, statEntry.fouls + numChange);
+      }
+    }
+
+    const currentFouls = team === 'A' ? match.foulsA : match.foulsB;
+    const isPenalty = currentFouls >= (match.foulLimit || 7);
+    const isDoublePenalty = currentFouls >= 10;
+
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'FOUL',
+      team,
+      playerId: foulerPlayer ? foulerPlayer._id : null,
+      playerName: foulerName,
+      jerseyNumber: jerseyNum,
+      gameTime: formatTime(match.getCurrentRemainingTime()),
+      metadata: {
+        prevFoulsA,
+        prevFoulsB,
+        newFouls: currentFouls,
+        isPenalty,
+        isDoublePenalty,
+        description: `${foulerName} Foul (${currentFouls})${isDoublePenalty ? ' - DOUBLE BONUS (2 FT + Ball)' : isPenalty ? ' - BONUS (2 FT)' : ''}`,
+      },
+    });
+
+    await match.save();
+    await broadcastState(req, match, event);
+
+    res.status(200).json({ success: true, data: match, event });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Toggle possession (← Team A / Team B →)
+// @route   POST /api/matches/:id/possession
+// @access  Private (Admin, Scorer)
+const togglePossession = async (req, res) => {
+  try {
+    const { possession } = req.body; // 'A', 'B', or toggle if omitted
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    const prevPossession = match.possession;
+    let nextPossession;
+
+    if (possession !== undefined) {
+      nextPossession = possession;
+    } else {
+      nextPossession = match.possession === 'A' ? 'B' : 'A';
+    }
+
+    match.possession = nextPossession;
+    await match.save();
+
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'POSSESSION',
+      team: nextPossession,
+      gameTime: formatTime(match.getCurrentRemainingTime()),
+      metadata: {
+        prevPossession,
+        newPossession: nextPossession,
+        description: `Possession awarded to Team ${nextPossession}`,
+      },
+    });
+
+    await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: match, event });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Call Timeout for Team A or Team B
+// @route   POST /api/matches/:id/timeout
+// @access  Private (Admin, Scorer)
+const callTimeout = async (req, res) => {
+  try {
+    const { team } = req.body;
+    if (!['A', 'B'].includes(team)) {
+      return res.status(400).json({ success: false, message: 'Valid team (A or B) is required' });
+    }
+
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    if (team === 'A') {
+      if (match.timeoutsA <= 0) {
+        return res.status(400).json({ success: false, message: 'Team A has no timeouts remaining' });
+      }
+      match.timeoutsA -= 1;
+    } else {
+      if (match.timeoutsB <= 0) {
+        return res.status(400).json({ success: false, message: 'Team B has no timeouts remaining' });
+      }
+      match.timeoutsB -= 1;
+    }
+
+    // Auto-pause timer when timeout is called
+    match.timerRunning = false;
+    match.timerStartedAt = null;
+    match.shotClockRunning = false;
+    match.shotClockStartedAt = null;
+    match.status = 'PAUSED';
+
+    await match.save();
+
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'TIMEOUT',
+      team,
+      gameTime: formatTime(match.getCurrentRemainingTime()),
+      metadata: {
+        description: `Timeout called by Team ${team} (${team === 'A' ? match.timeoutsA : match.timeoutsB} left)`,
+      },
+    });
+
+    // Whistle buzzer for timeout
+    const io = req.app.get('io');
+    broadcastBuzzerAlert(io, match._id.toString(), 'WHISTLE', { message: `Timeout Team ${team}` });
+
+    await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: match, event });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Record player stats (rebounds, assists, steals, blocks)
+// @route   POST /api/matches/:id/player-stats
+// @access  Private (Admin, Scorer)
+const recordPlayerStat = async (req, res) => {
+  try {
+    const { playerId, statType, change } = req.body; // statType: 'rebounds'|'assists'|'steals'|'blocks', change: 1 | -1
+
+    if (!playerId || !statType) {
+      return res.status(400).json({ success: false, message: 'Player ID and statType are required' });
+    }
+
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    const player = await Player.findById(playerId);
+    if (!player) return res.status(404).json({ success: false, message: 'Player not found' });
+
+    let statEntry = match.playerStats.find((s) => s.playerId.toString() === playerId.toString());
+    const delta = change !== undefined ? Number(change) : 1;
+
+    if (!statEntry) {
+      const isTeamA = match.playersA.some((p) => p.player.toString() === playerId.toString());
+      statEntry = {
+        playerId: player._id,
+        playerName: player.name,
+        jerseyNumber: player.jerseyNumber,
+        teamId: player.teamId,
+        team: isTeamA ? 'A' : 'B',
+        points: 0,
+        onePoints: 0,
+        twoPoints: 0,
+        rebounds: 0,
+        assists: 0,
+        steals: 0,
+        blocks: 0,
+        fouls: 0,
+      };
+      match.playerStats.push(statEntry);
+    }
+
+    if (statEntry[statType] !== undefined) {
+      statEntry[statType] = Math.max(0, statEntry[statType] + delta);
+    }
+
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: statType.toUpperCase(),
+      team: statEntry.team,
+      playerId: player._id,
+      playerName: player.name,
+      jerseyNumber: player.jerseyNumber,
+      gameTime: formatTime(match.getCurrentRemainingTime()),
+      metadata: {
+        statType,
+        delta,
+        newValue: statEntry[statType],
+        description: `${player.name} #${player.jerseyNumber} ${statType.slice(0, -1).toUpperCase()} (+${delta})`,
+      },
+    });
+
+    await match.save();
+    await broadcastState(req, match, event);
+
+    res.status(200).json({ success: true, data: match, event });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Undo last action
+// @route   POST /api/matches/:id/undo
+// @access  Private (Admin, Scorer)
+const undoLastAction = async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    // Find the latest undoable event
+    const lastEvent = await MatchEvent.findOne({
+      matchId: match._id,
+      type: { $in: ['SCORE', 'FOUL', 'POSSESSION', 'TIMEOUT', 'REBOUND', 'ASSIST', 'STEAL', 'BLOCK'] },
+    }).sort({ timestamp: -1 });
+
+    if (!lastEvent) {
+      return res.status(400).json({ success: false, message: 'No actions available to undo' });
+    }
+
+    // Revert based on event type
+    if (lastEvent.type === 'SCORE') {
+      if (lastEvent.metadata && lastEvent.metadata.prevScoreA !== undefined) {
+        match.scoreA = lastEvent.metadata.prevScoreA;
+        match.scoreB = lastEvent.metadata.prevScoreB;
+      } else {
+        if (lastEvent.team === 'A') match.scoreA = Math.max(0, match.scoreA - lastEvent.points);
+        if (lastEvent.team === 'B') match.scoreB = Math.max(0, match.scoreB - lastEvent.points);
+      }
+
+      // Revert player stat points
+      if (lastEvent.playerId && match.playerStats) {
+        const statEntry = match.playerStats.find(
+          (s) => s.playerId.toString() === lastEvent.playerId.toString()
+        );
+        if (statEntry) {
+          statEntry.points = Math.max(0, statEntry.points - lastEvent.points);
+          if (lastEvent.points === 1) statEntry.onePoints = Math.max(0, statEntry.onePoints - 1);
+          if (lastEvent.points === 2) statEntry.twoPoints = Math.max(0, statEntry.twoPoints - 1);
+        }
+      }
+
+      // If match was auto-completed due to target score, revert back to LIVE
+      if (match.status === 'COMPLETED' && match.scoreA < (match.targetScore || 21) && match.scoreB < (match.targetScore || 21)) {
+        match.status = 'LIVE';
+        match.winner = null;
+        match.winnerTeamId = null;
+        match.endedAt = null;
+      }
+    } else if (lastEvent.type === 'FOUL') {
+      if (lastEvent.metadata && lastEvent.metadata.prevFoulsA !== undefined) {
+        match.foulsA = lastEvent.metadata.prevFoulsA;
+        match.foulsB = lastEvent.metadata.prevFoulsB;
+      } else {
+        if (lastEvent.team === 'A') match.foulsA = Math.max(0, match.foulsA - 1);
+        if (lastEvent.team === 'B') match.foulsB = Math.max(0, match.foulsB - 1);
+      }
+
+      if (lastEvent.playerId && match.playerStats) {
+        const statEntry = match.playerStats.find(
+          (s) => s.playerId.toString() === lastEvent.playerId.toString()
+        );
+        if (statEntry) statEntry.fouls = Math.max(0, statEntry.fouls - 1);
+      }
+    } else if (lastEvent.type === 'POSSESSION') {
+      if (lastEvent.metadata && lastEvent.metadata.prevPossession !== undefined) {
+        match.possession = lastEvent.metadata.prevPossession;
+      }
+    } else if (lastEvent.type === 'TIMEOUT') {
+      if (lastEvent.team === 'A') match.timeoutsA = Math.min(1, match.timeoutsA + 1);
+      if (lastEvent.team === 'B') match.timeoutsB = Math.min(1, match.timeoutsB + 1);
+    } else if (['REBOUND', 'ASSIST', 'STEAL', 'BLOCK'].includes(lastEvent.type)) {
+      const statKey = lastEvent.type.toLowerCase() + 's';
+      if (lastEvent.playerId && match.playerStats) {
+        const statEntry = match.playerStats.find(
+          (s) => s.playerId.toString() === lastEvent.playerId.toString()
+        );
+        if (statEntry && statEntry[statKey] !== undefined) {
+          statEntry[statKey] = Math.max(0, statEntry[statKey] - 1);
+        }
+      }
+    }
+
+    // Delete the reverted event from history
+    await lastEvent.deleteOne();
+    await match.save();
+
+    await broadcastState(req, match);
+    res.status(200).json({
+      success: true,
+      message: `Undid last action: ${lastEvent.type}`,
+      data: match,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    End match & persist completed stats
+// @route   POST /api/matches/:id/end
+// @access  Private (Admin, Scorer)
+const endMatch = async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    match.status = 'COMPLETED';
+    match.endedAt = new Date();
+    match.timerRunning = false;
+    match.shotClockRunning = false;
+
+    // Calculate winner
+    if (match.scoreA > match.scoreB) {
+      match.winner = 'A';
+      match.winnerTeamId = match.teamA;
+    } else if (match.scoreB > match.scoreA) {
+      match.winner = 'B';
+      match.winnerTeamId = match.teamB;
+    } else {
+      match.winner = 'DRAW';
+      match.winnerTeamId = null;
+    }
+
+    match.finalScore = `${match.scoreA} - ${match.scoreB}`;
+
+    // Update Team stats in MongoDB
+    const teamA = await Team.findById(match.teamA);
+    const teamB = await Team.findById(match.teamB);
+
+    if (teamA) {
+      teamA.stats.played = (teamA.stats.played || 0) + 1;
+      teamA.stats.pointsFor = (teamA.stats.pointsFor || 0) + match.scoreA;
+      teamA.stats.pointsAgainst = (teamA.stats.pointsAgainst || 0) + match.scoreB;
+      if (match.winner === 'A') teamA.stats.wins = (teamA.stats.wins || 0) + 1;
+      if (match.winner === 'B') teamA.stats.losses = (teamA.stats.losses || 0) + 1;
+      await teamA.save();
+    }
+
+    if (teamB) {
+      teamB.stats.played = (teamB.stats.played || 0) + 1;
+      teamB.stats.pointsFor = (teamB.stats.pointsFor || 0) + match.scoreB;
+      teamB.stats.pointsAgainst = (teamB.stats.pointsAgainst || 0) + match.scoreA;
+      if (match.winner === 'B') teamB.stats.wins = (teamB.stats.wins || 0) + 1;
+      if (match.winner === 'A') teamB.stats.losses = (teamB.stats.losses || 0) + 1;
+      await teamB.save();
+    }
+
+    // Update Player stats in MongoDB
+    if (match.playerStats && match.playerStats.length > 0) {
+      for (const pStat of match.playerStats) {
+        await Player.findByIdAndUpdate(pStat.playerId, {
+          $inc: {
+            'stats.games': 1,
+            'stats.points': pStat.points || 0,
+            'stats.onePoints': pStat.onePoints || 0,
+            'stats.twoPoints': pStat.twoPoints || 0,
+            'stats.rebounds': pStat.rebounds || 0,
+            'stats.assists': pStat.assists || 0,
+            'stats.steals': pStat.steals || 0,
+            'stats.blocks': pStat.blocks || 0,
+            'stats.fouls': pStat.fouls || 0,
+          },
+        });
+      }
+    }
+
+    await match.save();
+
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'MATCH_END',
+      gameTime: formatTime(match.remainingTime),
+      metadata: {
+        winner: match.winner,
+        finalScore: match.finalScore,
+        description: `Match Ended! Final: ${match.finalScore}. Winner: Team ${match.winner}`,
+      },
+    });
+
+    const io = req.app.get('io');
+    broadcastBuzzerAlert(io, match._id.toString(), 'GAME_END', {
+      winner: match.winner,
+      finalScore: match.finalScore,
+    });
+
+    await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: match, event });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = {
+  startMatch,
+  pauseMatch,
+  resetTimer,
+  controlShotClock,
+  updateScore,
+  recordFoul,
+  togglePossession,
+  callTimeout,
+  recordPlayerStat,
+  undoLastAction,
+  endMatch,
+};

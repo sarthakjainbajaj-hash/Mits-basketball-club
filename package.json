@@ -1,24 +1,16 @@
 {
-  "name": "portfolio-website",
-  "private": true,
+  "name": "hoopscore-workspace",
   "version": "1.0.0",
-  "type": "module",
+  "description": "HoopScore - Live Basketball 3x3 Scoring & Match Management Web Application",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-icons": "^5.3.0",
-    "three": "^0.185.1"
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,magenta\" \"npm run server\" \"npm run client\"",
+    "client": "npm run dev --prefix frontend",
+    "server": "npm run dev --prefix backend",
+    "seed": "npm run seed --prefix backend",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "build": "npm run build --prefix frontend"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.14",
-    "vite": "^5.4.10"
+    "concurrently": "^8.2.2"
   }
 }
