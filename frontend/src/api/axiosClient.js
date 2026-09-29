@@ -1,10 +1,33 @@
 import axios from 'axios';
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? `${window.location.origin}/api`
-    : 'http://localhost:5000/api');
+// Resolve normalized API Base URL:
+// 1. If VITE_API_URL is provided: ensure it points to the API root (ends with /api)
+// 2. If not provided and running in production (Vercel/browser): default to Render backend URL + /api
+// 3. If running locally: default to http://localhost:5000/api
+const getApiBaseUrl = () => {
+  let url = import.meta.env.VITE_API_URL;
+  
+  if (url && typeof url === 'string' && url.trim() !== '') {
+    url = url.trim().replace(/\/+$/, ''); // remove trailing slashes
+    if (!url.endsWith('/api')) {
+      url = `${url}/api`;
+    }
+    return url;
+  }
+
+  // Fallback when VITE_API_URL is not provided
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+    if (!isLocalhost) {
+      return 'https://mits-basketball-club.onrender.com/api';
+    }
+  }
+
+  return 'http://localhost:5000/api';
+};
+
+const API_URL = getApiBaseUrl();
 
 const axiosClient = axios.create({
   baseURL: API_URL,

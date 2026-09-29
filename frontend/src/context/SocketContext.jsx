@@ -3,11 +3,36 @@ import { io } from 'socket.io-client';
 
 const SocketContext = createContext(null);
 
-const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? window.location.origin
-    : 'http://localhost:5000');
+// Resolve normalized Socket Server URL:
+// 1. If VITE_SOCKET_URL is set, use it.
+// 2. Otherwise derive from VITE_API_URL by stripping /api and trailing slash.
+// 3. Fallback: on non-localhost (Vercel production), connect to Render backend.
+// 4. On localhost, connect to http://localhost:5000.
+const getSocketUrl = () => {
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL.trim().replace(/\/+$/, '');
+  }
+
+  if (import.meta.env.VITE_API_URL) {
+    let api = import.meta.env.VITE_API_URL.trim().replace(/\/+$/, '');
+    if (api.endsWith('/api')) {
+      api = api.slice(0, -4);
+    }
+    return api;
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+    if (!isLocalhost) {
+      return 'https://mits-basketball-club.onrender.com';
+    }
+  }
+
+  return 'http://localhost:5000';
+};
+
+const SOCKET_URL = getSocketUrl();
 
 export const SocketProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);

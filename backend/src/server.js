@@ -30,10 +30,20 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
 ];
 
 const corsOriginHandler = (origin, callback) => {
-  if (!origin || allowedOrigins.includes(origin) || origin.includes('onrender.com') || origin.includes('vercel.app')) {
+  if (!origin) return callback(null, true);
+  if (
+    allowedOrigins.includes(origin) ||
+    origin.endsWith('.vercel.app') ||
+    origin.includes('vercel.app') ||
+    origin.endsWith('.onrender.com') ||
+    origin.includes('onrender.com') ||
+    origin.includes('localhost') ||
+    origin.includes('127.0.0.1')
+  ) {
     return callback(null, true);
   }
   return callback(null, true);
@@ -63,29 +73,45 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health Check Endpoint
-app.get('/api/health', (req, res) => {
+// Health Check Endpoints
+const healthResponse = (req, res) => {
   res.status(200).json({
     status: 'ok',
     app: 'HoopScore 3x3 API',
     time: new Date().toISOString(),
     env: process.env.NODE_ENV || 'development',
   });
-});
+};
+app.get('/api/health', healthResponse);
+app.get('/health', healthResponse);
 
-// Mount Routes
+// Mount Routes (Both /api prefix and direct paths for universal compatibility)
 app.use('/api/auth', authRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/matches', matchRoutes);
 
+app.use('/auth', authRoutes);
+app.use('/teams', teamRoutes);
+app.use('/players', playerRoutes);
+app.use('/tournaments', tournamentRoutes);
+app.use('/matches', matchRoutes);
+
 // Serve static frontend build when dist directory exists
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
 if (fs.existsSync(frontendDistPath)) {
   app.use(express.static(frontendDistPath));
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/auth') ||
+      req.path.startsWith('/teams') ||
+      req.path.startsWith('/players') ||
+      req.path.startsWith('/tournaments') ||
+      req.path.startsWith('/matches') ||
+      req.path.startsWith('/socket.io')
+    ) {
       return next();
     }
     res.sendFile(path.join(frontendDistPath, 'index.html'));
