@@ -74,12 +74,20 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Health Check Endpoints
+const mongoose = require('mongoose');
 const healthResponse = (req, res) => {
+  const host = mongoose.connection.host || '';
+  const isAtlas = host.includes('mongodb.net');
   res.status(200).json({
     status: 'ok',
     app: 'HoopScore 3x3 API',
     time: new Date().toISOString(),
     env: process.env.NODE_ENV || 'development',
+    database: {
+      connected: mongoose.connection.readyState === 1,
+      type: isAtlas ? 'MongoDB Atlas (Cloud Permanent)' : (host.includes('127.0.0.1') ? 'Embedded In-Memory Fallback' : host),
+      host: isAtlas ? host : (host.includes('127.0.0.1') ? 'Internal Memory Instance' : host),
+    },
   });
 };
 app.get('/api/health', healthResponse);
