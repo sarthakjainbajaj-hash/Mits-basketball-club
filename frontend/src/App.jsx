@@ -7,6 +7,7 @@ import { SoundProvider } from './context/SoundContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Pages
 import LoginPage from './pages/LoginPage';
@@ -33,13 +34,17 @@ const AppLayout = ({ children }) => {
   const isSpectatorScoreboard = location.pathname.startsWith('/live/');
 
   if (isSpectatorScoreboard) {
-    return <>{children}</>;
+    return <ErrorBoundary>{children}</ErrorBoundary>;
   }
 
   return (
     <div className="flex flex-col min-h-screen bg-hoop-dark text-slate-100">
       <Navbar />
-      <main className="flex-1 pb-12">{children}</main>
+      <main className="flex-1 pb-12">
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
+      </main>
       <Footer />
     </div>
   );

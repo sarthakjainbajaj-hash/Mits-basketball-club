@@ -325,7 +325,7 @@ const LiveScoreboardPage = () => {
   const teamBSubs = match.teamB_roster?.substitutes || [];
 
   // Robust determination of on-court players for the scoring modal
-  const activePlayersForModal = React.useMemo(() => {
+  const activePlayersForModal = (() => {
     if (!match) return [];
     const team = scorerModal.team;
 
@@ -352,7 +352,7 @@ const LiveScoreboardPage = () => {
 
     // 3. Fallback to all team players
     return team === 'A' ? (match.playersA || []) : (match.playersB || []);
-  }, [match, scorerModal.team, teamAStarters, teamBStarters]);
+  })();
 
   return (
     <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5">

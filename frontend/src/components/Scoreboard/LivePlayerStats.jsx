@@ -104,21 +104,22 @@ const LivePlayerStats = ({
                   ? starterIds.has(pIdStr)
                   : p.isActive !== false;
 
+                const pName = p.playerName || '';
                 const isCap =
                   p.isCaptain ||
-                  p.playerName.includes('(C)') ||
-                  p.playerName.includes('[C]') ||
+                  pName.includes('(C)') ||
+                  pName.includes('[C]') ||
                   (teamData?.captain &&
-                    p.playerName.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase() ===
-                      teamData.captain.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase());
+                    pName.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase() ===
+                      (teamData.captain || '').replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase());
 
                 const isViceCap =
                   p.isViceCaptain ||
-                  p.playerName.includes('(VC)') ||
-                  p.playerName.includes('[VC]') ||
+                  pName.includes('(VC)') ||
+                  pName.includes('[VC]') ||
                   (teamData?.viceCaptain &&
-                    p.playerName.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase() ===
-                      teamData.viceCaptain.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase());
+                    pName.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase() ===
+                      (teamData.viceCaptain || '').replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase());
 
                 return (
                   <tr
