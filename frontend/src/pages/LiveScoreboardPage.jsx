@@ -28,6 +28,12 @@ import {
   ArrowRightLeft,
   FastForward,
   Flag,
+  Share2,
+  Maximize2,
+  Minimize2,
+  Keyboard,
+  X,
+  Zap,
 } from 'lucide-react';
 
 const LiveScoreboardPage = () => {
@@ -40,6 +46,8 @@ const LiveScoreboardPage = () => {
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showHotkeysModal, setShowHotkeysModal] = useState(false);
 
   // Quick Scorer Attribution Modal State
   const [scorerModal, setScorerModal] = useState({
@@ -106,26 +114,107 @@ const LiveScoreboardPage = () => {
     };
   }, [id, socket, joinMatch, leaveMatch, playShotClockBuzzer, playGameEndHorn, playWhistle]);
 
-  // Main Timer Handlers
+  // Fullscreen change listener
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  };
+
+  // WhatsApp Live Match Share
+  const handleShareWhatsApp = () => {
+    if (!match) return;
+    const shareUrl = `${window.location.origin}/live/${match._id}`;
+    const matchName = match.matchName || 'HoopScore Live Match';
+    const teamAName = match.teamA?.name || 'Team A';
+    const teamBName = match.teamB?.name || 'Team B';
+    const scoreText = `${match.scoreA} - ${match.scoreB}`;
+    const periodText = match.currentPeriod || (match.matchType === '5x5' ? 'Q1' : 'REGULATION');
+    const text = `🏀 *HoopScore Live Basketball*\n*${matchName}*\n\n🔥 *${teamAName}* ${scoreText} *${teamBName}*\n⏱ Period: ${periodText}\n\n👉 *Watch Live Scoreboard:*\n${shareUrl}`;
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Main Timer Handlers with 0ms Optimistic UI Updates
   const handleStartTimer = async () => {
+    const now = Date.now();
+    playClick();
+
+    // 0ms Optimistic Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        status: prev.status === 'SCHEDULED' ? 'LIVE' : prev.status,
+        timerRunning: true,
+        timerStartedAt: now,
+        shotClockRunning: true,
+        shotClockStartedAt: now,
+      };
+    });
+    setToast({ message: 'Game timer started (0ms)', type: 'success' });
+
     try {
-      playClick();
       const res = await matchApi.start(id);
-      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data, timerRunning: true }));
-      setToast({ message: 'Game timer started', type: 'success' });
+      if (res?.data) {
+        setMatch((prev) => ({ ...prev, ...res.data, timerRunning: true }));
+      }
     } catch (err) {
       setToast({ message: err.message || 'Failed to start timer', type: 'error' });
+      fetchMatch();
     }
   };
 
   const handlePauseTimer = async () => {
+    const now = Date.now();
+    playClick();
+
+    // 0ms Optimistic Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      let newRemainingTime = prev.remainingTime;
+      if (prev.timerRunning && prev.timerStartedAt) {
+        const elapsed = (now - prev.timerStartedAt) / 1000;
+        newRemainingTime = Math.max(0, Math.round((prev.remainingTime - elapsed) * 10) / 10);
+      }
+      let newScRemaining = prev.shotClockRemaining;
+      if (prev.shotClockRunning && prev.shotClockStartedAt) {
+        const scElapsed = (now - prev.shotClockStartedAt) / 1000;
+        newScRemaining = Math.max(0, Math.round((prev.shotClockRemaining - scElapsed) * 10) / 10);
+      }
+      return {
+        ...prev,
+        status: prev.status === 'LIVE' ? 'PAUSED' : prev.status,
+        timerRunning: false,
+        timerStartedAt: null,
+        remainingTime: newRemainingTime,
+        shotClockRunning: false,
+        shotClockStartedAt: null,
+        shotClockRemaining: newScRemaining,
+      };
+    });
+    setToast({ message: 'Game timer paused (0ms)', type: 'info' });
+
     try {
-      playClick();
       const res = await matchApi.pause(id);
-      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data, timerRunning: false }));
-      setToast({ message: 'Game timer paused', type: 'info' });
+      if (res?.data) {
+        setMatch((prev) => ({ ...prev, ...res.data, timerRunning: false }));
+      }
     } catch (err) {
       setToast({ message: err.message || 'Failed to pause timer', type: 'error' });
+      fetchMatch();
     }
   };
 
@@ -135,28 +224,90 @@ const LiveScoreboardPage = () => {
       : (match.gameDuration || 600);
 
     if (!window.confirm(`Reset period clock back to ${Math.floor(defaultSecs / 60)}:00?`)) return;
+
+    playClick();
+    // 0ms Optimistic Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        remainingTime: defaultSecs,
+        timerRunning: false,
+        timerStartedAt: null,
+      };
+    });
+    setToast({ message: `Clock reset to ${Math.floor(defaultSecs / 60)}:00`, type: 'info' });
+
     try {
-      playClick();
       const res = await matchApi.resetTimer(id, defaultSecs);
       if (res?.data) setMatch(res.data);
-      setToast({ message: `Clock reset to ${Math.floor(defaultSecs / 60)}:00`, type: 'info' });
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
+      fetchMatch();
     }
   };
 
-  // Shot Clock Handlers
+  // Shot Clock Handlers with 0ms Optimistic UI Updates
   const handleShotClockAction = async (action, seconds) => {
+    const now = Date.now();
+    playClick();
+
+    // 0ms Optimistic Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      const is5x5 = prev.matchType === '5x5';
+      const fullDuration = prev.settings?.shotClock || (is5x5 ? 24 : 12);
+      const shortDuration = is5x5 ? 14 : 2;
+
+      let newScRemaining = prev.shotClockRemaining;
+      let newScRunning = prev.shotClockRunning;
+      let newScStartedAt = prev.shotClockStartedAt;
+
+      if (action === 'RESET_FULL' || (action === 'RESET_12' && !is5x5) || action === 'RESET_24') {
+        newScRemaining = action === 'RESET_24' ? 24 : fullDuration;
+        newScRunning = prev.timerRunning;
+        newScStartedAt = prev.timerRunning ? now : null;
+      } else if (action === 'RESET_12') {
+        newScRemaining = 12;
+        newScRunning = prev.timerRunning;
+        newScStartedAt = prev.timerRunning ? now : null;
+      } else if (action === 'RESET_SHORT' || action === 'RESET_14' || action === 'RESET_2') {
+        newScRemaining = action === 'RESET_14' ? 14 : (action === 'RESET_2' ? 2 : shortDuration);
+        newScRunning = prev.timerRunning;
+        newScStartedAt = prev.timerRunning ? now : null;
+      } else if (action === 'SET' && seconds !== undefined) {
+        newScRemaining = Number(seconds);
+        newScStartedAt = prev.shotClockRunning ? now : null;
+      } else if (action === 'PAUSE') {
+        if (prev.shotClockRunning && prev.shotClockStartedAt) {
+          const scElapsed = (now - prev.shotClockStartedAt) / 1000;
+          newScRemaining = Math.max(0, Math.round((prev.shotClockRemaining - scElapsed) * 10) / 10);
+        }
+        newScRunning = false;
+        newScStartedAt = null;
+      } else if (action === 'RESUME') {
+        newScRunning = true;
+        newScStartedAt = now;
+      }
+
+      return {
+        ...prev,
+        shotClockRemaining: newScRemaining,
+        shotClockRunning: newScRunning,
+        shotClockStartedAt: newScStartedAt,
+      };
+    });
+
     try {
-      playClick();
       const res = await matchApi.controlShotClock(id, { action, seconds });
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
+      fetchMatch();
     }
   };
 
-  // Scoring with Player Attribution
+  // Scoring with Player Attribution and 0ms Optimistic UI Updates
   const handleOpenScorerModal = (team, points) => {
     setScorerModal({
       isOpen: true,
@@ -165,12 +316,58 @@ const LiveScoreboardPage = () => {
     });
   };
 
-  const executeScoreUpdate = async (team, points, playerId) => {
+  const executeScoreUpdate = async (team, points, playerId = null) => {
+    const numPoints = Number(points);
+    playClick();
+    setScorerModal({ isOpen: false, team: 'A', points: 1 });
+
+    const teamName = team === 'A' ? (match?.teamA?.shortName || 'Team A') : (match?.teamB?.shortName || 'Team B');
+
+    // 0ms Optimistic UI Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      const newScoreA = team === 'A' ? Math.max(0, prev.scoreA + numPoints) : prev.scoreA;
+      const newScoreB = team === 'B' ? Math.max(0, prev.scoreB + numPoints) : prev.scoreB;
+
+      let updatedPlayerStats = prev.playerStats ? [...prev.playerStats] : [];
+      if (playerId) {
+        const pidStr = playerId.toString();
+        updatedPlayerStats = updatedPlayerStats.map((s) => {
+          const sId = s.playerId ? (s.playerId._id || s.playerId).toString() : '';
+          if (sId === pidStr) {
+            const pPoints = Math.max(0, (s.points || 0) + numPoints);
+            let onePts = s.onePoints || 0;
+            let twoPts = s.twoPoints || 0;
+            let threePts = s.threePoints || 0;
+            if (numPoints === 1) onePts += 1;
+            else if (numPoints === 2) twoPts += 1;
+            else if (numPoints === 3) threePts += 1;
+            else if (numPoints === -1 && onePts > 0) onePts -= 1;
+            else if (numPoints === -2 && twoPts > 0) twoPts -= 1;
+            else if (numPoints === -3 && threePts > 0) threePts -= 1;
+
+            return { ...s, points: pPoints, onePoints: onePts, twoPoints: twoPts, threePoints: threePts };
+          }
+          return s;
+        });
+      }
+
+      return {
+        ...prev,
+        scoreA: newScoreA,
+        scoreB: newScoreB,
+        playerStats: updatedPlayerStats,
+      };
+    });
+
+    setToast({
+      message: `${numPoints > 0 ? `+${numPoints}` : numPoints} PT for ${teamName} (0ms)`,
+      type: 'success',
+    });
+
     try {
-      playClick();
-      setScorerModal({ isOpen: false, team: 'A', points: 1 });
       const res = await matchApi.updateScore(id, { team, points, playerId });
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
 
       if (res?.autoCompleted) {
         playGameEndHorn();
@@ -178,40 +375,86 @@ const LiveScoreboardPage = () => {
       }
     } catch (err) {
       setToast({ message: err.message || 'Failed to update score', type: 'error' });
+      fetchMatch();
     }
   };
 
-  // Foul Handlers
+  // Foul Handlers with 0ms Optimistic UI Updates
   const handleFoulAction = async (team, change) => {
+    playClick();
+    const numChange = Number(change);
+    const teamName = team === 'A' ? (match?.teamA?.shortName || 'Team A') : (match?.teamB?.shortName || 'Team B');
+
+    // 0ms Optimistic Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        foulsA: team === 'A' ? Math.max(0, prev.foulsA + numChange) : prev.foulsA,
+        foulsB: team === 'B' ? Math.max(0, prev.foulsB + numChange) : prev.foulsB,
+      };
+    });
+
+    setToast({
+      message: `${numChange > 0 ? `+${numChange}` : numChange} Foul for ${teamName} (0ms)`,
+      type: 'warning',
+    });
+
     try {
-      playClick();
       const res = await matchApi.recordFoul(id, { team, change });
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
     } catch (err) {
       setToast({ message: err.message || 'Failed to update foul', type: 'error' });
+      fetchMatch();
     }
   };
 
-  // Possession Toggle
+  // Possession Toggle with 0ms Optimistic UI Update
   const handleTogglePossession = async () => {
+    playClick();
+    // 0ms Optimistic Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      const nextPossession = prev.possession === 'A' ? 'B' : prev.possession === 'B' ? 'A' : 'A';
+      return {
+        ...prev,
+        possession: nextPossession,
+      };
+    });
+
     try {
-      playClick();
       const res = await matchApi.togglePossession(id);
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
+      fetchMatch();
     }
   };
 
-  // Timeout Handler
+  // Timeout Handler with 0ms Optimistic UI Update
   const handleCallTimeout = async (team) => {
+    playWhistle();
+    // 0ms Optimistic Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        timeoutsA: team === 'A' ? Math.max(0, prev.timeoutsA - 1) : prev.timeoutsA,
+        timeoutsB: team === 'B' ? Math.max(0, prev.timeoutsB - 1) : prev.timeoutsB,
+        timerRunning: false,
+        timerStartedAt: null,
+        shotClockRunning: false,
+        shotClockStartedAt: null,
+      };
+    });
+    setToast({ message: `Timeout called by Team ${team} (0ms)`, type: 'warning' });
+
     try {
-      playWhistle();
       const res = await matchApi.callTimeout(id, team);
-      if (res?.data) setMatch(res.data);
-      setToast({ message: `Timeout called by Team ${team}`, type: 'warning' });
+      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
     } catch (err) {
       setToast({ message: err.message || 'Failed to call timeout', type: 'error' });
+      fetchMatch();
     }
   };
 
@@ -251,15 +494,36 @@ const LiveScoreboardPage = () => {
     }
   };
 
-  // Live Player Stat Tracker (+REB, +AST, +STL, +BLK)
+  // Live Player Stat Tracker (+REB, +AST, +STL, +BLK) with 0ms Optimistic Update
   const handleRecordPlayerStat = async (playerId, statType, change) => {
     try {
       playClick();
+      // 0ms Optimistic Update
+      setMatch((prev) => {
+        if (!prev) return prev;
+        const pidStr = playerId.toString();
+        const updatedStats = (prev.playerStats || []).map((s) => {
+          const sId = s.playerId ? (s.playerId._id || s.playerId).toString() : '';
+          if (sId === pidStr) {
+            return {
+              ...s,
+              [statType]: Math.max(0, (s[statType] || 0) + Number(change)),
+            };
+          }
+          return s;
+        });
+        return {
+          ...prev,
+          playerStats: updatedStats,
+        };
+      });
+
+      setToast({ message: `Recorded ${statType.slice(0, -1).toUpperCase()} (+${change}) (0ms)`, type: 'info' });
       const res = await matchApi.recordPlayerStat(id, { playerId, statType, change });
       if (res?.data) setMatch(res.data);
-      setToast({ message: `Recorded ${statType.slice(0, -1).toUpperCase()} (+${change})`, type: 'info' });
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
+      fetchMatch();
     }
   };
 
@@ -274,6 +538,133 @@ const LiveScoreboardPage = () => {
       setToast({ message: err.message || 'Nothing to undo', type: 'warning' });
     }
   };
+
+  // Scorer Keyboard Shortcuts Hook (Instant table control)
+  useEffect(() => {
+    if (!isScorer || match?.status === 'COMPLETED') return;
+
+    const handleKeyDown = (e) => {
+      // Don't trigger shortcuts if user is typing in an input, textarea or contenteditable element
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) {
+        return;
+      }
+
+      // Escape closes open modals
+      if (e.key === 'Escape') {
+        if (scorerModal.isOpen) setScorerModal({ isOpen: false, team: 'A', points: 1 });
+        if (subModal.isOpen) setSubModal({ isOpen: false, team: 'A' });
+        if (showHotkeysModal) setShowHotkeysModal(false);
+        return;
+      }
+
+      // If QuickScorer or Substitution modal is open, don't trigger game keys
+      if (scorerModal.isOpen || subModal.isOpen) return;
+
+      // Question mark or 'H' opens hotkeys help cheat sheet
+      if (e.key === '?' || (e.key.toLowerCase() === 'h' && !e.ctrlKey && !e.metaKey)) {
+        e.preventDefault();
+        setShowHotkeysModal((prev) => !prev);
+        return;
+      }
+
+      // Spacebar: Toggle Game Clock (Start / Pause)
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (match?.timerRunning) {
+          handlePauseTimer();
+        } else {
+          handleStartTimer();
+        }
+        return;
+      }
+
+      // Shot Clock Reset: S or s
+      if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        handleShotClockAction(match?.matchType === '5x5' ? 'RESET_24' : 'RESET_12');
+        return;
+      }
+
+      // Possession Toggle: P or p
+      if (e.key.toLowerCase() === 'p' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        handleTogglePossession();
+        return;
+      }
+
+      // Undo: Ctrl + Z
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      const is5x5 = match?.matchType === '5x5';
+
+      // Left Hand Controls - Team A
+      if (e.key.toLowerCase() === 'q') {
+        e.preventDefault();
+        executeScoreUpdate('A', 1);
+        return;
+      }
+      if (e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        executeScoreUpdate('A', 2);
+        return;
+      }
+      if (e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        if (is5x5) {
+          executeScoreUpdate('A', 3);
+        }
+        return;
+      }
+      if (e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        handleFoulAction('A', 1);
+        return;
+      }
+
+      // Right Hand Controls - Team B
+      if (e.key.toLowerCase() === 'u') {
+        e.preventDefault();
+        executeScoreUpdate('B', 1);
+        return;
+      }
+      if (e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        executeScoreUpdate('B', 2);
+        return;
+      }
+      if (e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        if (is5x5) {
+          executeScoreUpdate('B', 3);
+        }
+        return;
+      }
+      if (e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        handleFoulAction('B', 1);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isScorer,
+    match?.status,
+    match?.timerRunning,
+    match?.matchType,
+    match?.remainingTime,
+    match?.shotClockRemaining,
+    match?.possession,
+    scorerModal.isOpen,
+    subModal.isOpen,
+    showHotkeysModal,
+  ]);
 
   // End Match
   const handleEndMatch = async () => {
@@ -446,6 +837,38 @@ const LiveScoreboardPage = () => {
             title={soundEnabled ? 'Arena Horns Enabled' : 'Arena Horns Muted'}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+
+          {/* Keyboard Hotkeys Cheat Sheet */}
+          {isScorer && !isCompleted && (
+            <button
+              onClick={() => setShowHotkeysModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 text-xs font-mono font-bold border border-amber-500/30 transition-all shadow-sm"
+              title="View Scorer Fast Keyboard Shortcuts (Hotkeys)"
+            >
+              <Keyboard className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Keys</span>
+            </button>
+          )}
+
+          {/* WhatsApp Live Score Share */}
+          <button
+            onClick={handleShareWhatsApp}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 hover:text-white text-xs font-mono font-bold border border-emerald-800/80 transition-all shadow-sm"
+            title="Share live match scoreboard on WhatsApp"
+          >
+            <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Share</span>
+          </button>
+
+          {/* Fullscreen Stadium / Projector Mode */}
+          <button
+            onClick={toggleFullscreen}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-mono font-bold border border-slate-700 transition-all shadow-sm"
+            title={isFullscreen ? 'Exit Fullscreen' : 'Arena Fullscreen Mode'}
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-indigo-400" />}
+            <span className="hidden md:inline">{isFullscreen ? 'Exit' : 'Stadium'}</span>
           </button>
 
           {/* Spectator Public View Link */}
@@ -707,6 +1130,176 @@ const LiveScoreboardPage = () => {
         onSubstitute={handlePerformSubstitution}
         onClose={() => setSubModal({ isOpen: false, team: 'A' })}
       />
+
+      {/* Scorer Keyboard Shortcuts Cheat Sheet Modal */}
+      {showHotkeysModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Keyboard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    Scorer Fast Keyboard Hotkeys
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      0ms INSTANT
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    Control live scoreboard instantly without touching the mouse!
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowHotkeysModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-5 overflow-y-auto space-y-4">
+              {/* Universal Match Controls */}
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" /> Universal Match Controls
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <span className="text-slate-300 font-medium">Start / Pause Game Clock</span>
+                    <kbd className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-amber-400 font-mono font-bold text-xs shadow-sm">
+                      SPACE
+                    </kbd>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <span className="text-slate-300 font-medium">Reset Shot Clock ({is5x5 ? '24s' : '12s'})</span>
+                    <kbd className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-cyan-400 font-mono font-bold text-xs shadow-sm">
+                      S
+                    </kbd>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <span className="text-slate-300 font-medium">Toggle Possession Arrow</span>
+                    <kbd className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-white font-mono font-bold text-xs shadow-sm">
+                      P
+                    </kbd>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <span className="text-slate-300 font-medium">Undo Last Action</span>
+                    <kbd className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-rose-400 font-mono font-bold text-xs shadow-sm">
+                      CTRL + Z
+                    </kbd>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2-Column Split: Left Hand (Team A) vs Right Hand (Team B) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Left Hand: Team A */}
+                <div className="p-4 rounded-2xl bg-orange-950/20 border border-orange-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-orange-400">
+                      Left Hand — {match.teamA?.shortName || 'Team A'}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">Left side keys</span>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+                      <span className="text-slate-300">+1 Point (Free Throw)</span>
+                      <kbd className="px-2.5 py-0.5 rounded bg-orange-950 text-orange-400 font-mono font-bold border border-orange-700 shadow-sm">
+                        Q
+                      </kbd>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+                      <span className="text-slate-300">+2 Points (Field Goal)</span>
+                      <kbd className="px-2.5 py-0.5 rounded bg-orange-950 text-orange-400 font-mono font-bold border border-orange-700 shadow-sm">
+                        W
+                      </kbd>
+                    </div>
+                    {is5x5 && (
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+                        <span className="text-slate-300">+3 Points (3-Pointer)</span>
+                        <kbd className="px-2.5 py-0.5 rounded bg-orange-950 text-orange-400 font-mono font-bold border border-orange-700 shadow-sm">
+                          E
+                        </kbd>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+                      <span className="text-slate-300">+1 Team Foul</span>
+                      <kbd className="px-2.5 py-0.5 rounded bg-red-950 text-red-400 font-mono font-bold border border-red-700 shadow-sm">
+                        A
+                      </kbd>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Hand: Team B */}
+                <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400">
+                      Right Hand — {match.teamB?.shortName || 'Team B'}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">Right side keys</span>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+                      <span className="text-slate-300">+1 Point (Free Throw)</span>
+                      <kbd className="px-2.5 py-0.5 rounded bg-cyan-950 text-cyan-400 font-mono font-bold border border-cyan-700 shadow-sm">
+                        U
+                      </kbd>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+                      <span className="text-slate-300">+2 Points (Field Goal)</span>
+                      <kbd className="px-2.5 py-0.5 rounded bg-cyan-950 text-cyan-400 font-mono font-bold border border-cyan-700 shadow-sm">
+                        I
+                      </kbd>
+                    </div>
+                    {is5x5 && (
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+                        <span className="text-slate-300">+3 Points (3-Pointer)</span>
+                        <kbd className="px-2.5 py-0.5 rounded bg-cyan-950 text-cyan-400 font-mono font-bold border border-cyan-700 shadow-sm">
+                          O
+                        </kbd>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+                      <span className="text-slate-300">+1 Team Foul</span>
+                      <kbd className="px-2.5 py-0.5 rounded bg-red-950 text-red-400 font-mono font-bold border border-red-700 shadow-sm">
+                        K
+                      </kbd>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pro Tip Callout */}
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300/90 flex items-start gap-2.5">
+                <span className="text-base">💡</span>
+                <div>
+                  <p className="font-bold text-amber-200">Table Official Pro-Tip:</p>
+                  <p className="text-[11px] text-amber-300/80 mt-0.5 leading-relaxed">
+                    Keyboard keys update the scoreboard in <strong>0ms</strong> with zero network delay. If you want to attribute points to a specific player name, click the score button on the team card or click any player in the box score below!
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
+              <span className="text-xs text-slate-500 font-mono">Press [?] or [H] anytime to toggle</span>
+              <button
+                onClick={() => setShowHotkeysModal(false)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors"
+              >
+                Close (Esc)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
