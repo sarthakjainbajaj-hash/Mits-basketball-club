@@ -29,28 +29,78 @@ const getApiBaseUrl = () => {
 
 const API_URL = getApiBaseUrl();
 
+// In-Memory Fast Cache for read-only GET requests (Instant 0ms page navigation)
+const apiCache = new Map();
+const CACHE_TTL_MS = 25 * 1000; // 25 seconds cache
+
+export const clearApiCache = () => {
+  apiCache.clear();
+};
+
 const axiosClient = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 45000, // 45s timeout to comfortably tolerate free-tier container wakeups
 });
 
-// Request interceptor to attach JWT token
+// Request interceptor to attach JWT token and check memory cache
 axiosClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('hoopscore_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const method = (config.method || 'get').toLowerCase();
+
+    // Cache check for GET requests
+    if (method === 'get' && !config.params?._nocache && config.headers?.['Cache-Control'] !== 'no-cache') {
+      const cacheKey = `${config.url}_${JSON.stringify(config.params || {})}`;
+      const cached = apiCache.get(cacheKey);
+
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        // Return synthetic response from cache to skip HTTP roundtrip
+        config.adapter = () =>
+          Promise.resolve({
+            data: cached.data,
+            status: 200,
+            statusText: 'OK',
+            headers: {},
+            config,
+            request: {},
+          });
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor for centralized error extraction
+// Response interceptor for caching and centralized error extraction
 axiosClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    const config = response.config || {};
+    const method = (config.method || 'get').toLowerCase();
+
+    // Save successful GET responses into in-memory cache
+    if (method === 'get' && response.data?.success && !config.params?._nocache) {
+      const cacheKey = `${config.url}_${JSON.stringify(config.params || {})}`;
+      apiCache.set(cacheKey, {
+        data: response.data,
+        timestamp: Date.now(),
+      });
+    }
+
+    // Auto-invalidate cache on data modifications (POST, PUT, DELETE, PATCH)
+    if (['post', 'put', 'delete', 'patch'].includes(method)) {
+      clearApiCache();
+    }
+
+    return response.data;
+  },
   (error) => {
     const message =
       error.response?.data?.message ||
@@ -61,11 +111,24 @@ axiosClient.interceptors.response.use(
     if (error.response?.status === 401 && window.location.pathname !== '/login') {
       localStorage.removeItem('hoopscore_token');
       localStorage.removeItem('hoopscore_user');
-      // allow redirect if not already on login page
     }
 
     return Promise.reject(new Error(message));
   }
 );
+
+// Background Warm-Up & Keep-Alive to prevent Render free-tier sleep
+if (typeof window !== 'undefined') {
+  const triggerWarmup = () => {
+    const healthUrl = API_URL.replace(/\/api$/, '') + '/health';
+    fetch(healthUrl, { mode: 'cors' }).catch(() => {});
+  };
+
+  // Immediate warmup ping on initial load
+  setTimeout(triggerWarmup, 100);
+
+  // Periodic keep-alive ping every 9 minutes while page is open
+  setInterval(triggerWarmup, 9 * 60 * 1000);
+}
 
 export default axiosClient;

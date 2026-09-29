@@ -9,7 +9,8 @@ const getTournaments = async (req, res) => {
   try {
     const tournaments = await Tournament.find()
       .populate('teams', 'name shortName logo primaryColor')
-      .sort({ startDate: -1 });
+      .sort({ startDate: -1 })
+      .lean();
 
     res.status(200).json({ success: true, count: tournaments.length, data: tournaments });
   } catch (error) {

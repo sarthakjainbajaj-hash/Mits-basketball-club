@@ -22,7 +22,7 @@ const getTeams = async (req, res) => {
       };
     }
 
-    const teams = await Team.find(query).populate('players').sort({ 'stats.wins': -1, name: 1 });
+    const teams = await Team.find(query).populate('players').sort({ 'stats.wins': -1, name: 1 }).lean();
     res.status(200).json({ success: true, count: teams.length, data: teams });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

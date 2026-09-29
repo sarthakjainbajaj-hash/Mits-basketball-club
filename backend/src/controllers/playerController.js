@@ -23,7 +23,8 @@ const getPlayers = async (req, res) => {
 
     const players = await Player.find(query)
       .populate('teamId', 'name shortName logo primaryColor')
-      .sort({ 'stats.points': -1, name: 1 });
+      .sort({ 'stats.points': -1, name: 1 })
+      .lean();
 
     res.status(200).json({ success: true, count: players.length, data: players });
   } catch (error) {
@@ -149,22 +150,26 @@ const getPlayerLeaderboard = async (req, res) => {
     const topScorers = await Player.find()
       .populate('teamId', 'name shortName logo primaryColor')
       .sort({ 'stats.points': -1 })
-      .limit(10);
+      .limit(10)
+      .lean();
 
     const topTwoPointers = await Player.find()
       .populate('teamId', 'name shortName logo primaryColor')
       .sort({ 'stats.twoPoints': -1 })
-      .limit(10);
+      .limit(10)
+      .lean();
 
     const topRebounders = await Player.find()
       .populate('teamId', 'name shortName logo primaryColor')
       .sort({ 'stats.rebounds': -1 })
-      .limit(10);
+      .limit(10)
+      .lean();
 
     const topAssists = await Player.find()
       .populate('teamId', 'name shortName logo primaryColor')
       .sort({ 'stats.assists': -1 })
-      .limit(10);
+      .limit(10)
+      .lean();
 
     res.status(200).json({
       success: true,

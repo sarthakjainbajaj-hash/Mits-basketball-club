@@ -71,4 +71,7 @@ const teamSchema = new mongoose.Schema(
   }
 );
 
+// Index for fast team sorting
+teamSchema.index({ 'stats.wins': -1, name: 1 });
+
 module.exports = mongoose.model('Team', teamSchema);

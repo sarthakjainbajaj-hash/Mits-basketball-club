@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
@@ -9,24 +9,32 @@ import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Pages
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
+// Eager loaded for instant homepage render
 import DashboardPage from './pages/DashboardPage';
-import TeamsPage from './pages/TeamsPage';
-import TeamDetailsPage from './pages/TeamDetailsPage';
-import PlayersPage from './pages/PlayersPage';
-import TournamentsPage from './pages/TournamentsPage';
-import TournamentDetailsPage from './pages/TournamentDetailsPage';
-import CreateMatchPage from './pages/CreateMatchPage';
-import MatchSetupPage from './pages/MatchSetupPage';
-import LiveScoreboardPage from './pages/LiveScoreboardPage';
-import PublicScoreboardPage from './pages/PublicScoreboardPage';
-import MatchHistoryPage from './pages/MatchHistoryPage';
-import MatchDetailsPage from './pages/MatchDetailsPage';
-import PlayerStatsPage from './pages/PlayerStatsPage';
-import SettingsPage from './pages/SettingsPage';
-import NotFoundPage from './pages/NotFoundPage';
+
+// Lazy-loaded routes (code-split to drastically speed up initial page download)
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const TeamsPage = lazy(() => import('./pages/TeamsPage'));
+const TeamDetailsPage = lazy(() => import('./pages/TeamDetailsPage'));
+const PlayersPage = lazy(() => import('./pages/PlayersPage'));
+const PlayerStatsPage = lazy(() => import('./pages/PlayerStatsPage'));
+const TournamentsPage = lazy(() => import('./pages/TournamentsPage'));
+const TournamentDetailsPage = lazy(() => import('./pages/TournamentDetailsPage'));
+const CreateMatchPage = lazy(() => import('./pages/CreateMatchPage'));
+const MatchSetupPage = lazy(() => import('./pages/MatchSetupPage'));
+const LiveScoreboardPage = lazy(() => import('./pages/LiveScoreboardPage'));
+const PublicScoreboardPage = lazy(() => import('./pages/PublicScoreboardPage'));
+const MatchHistoryPage = lazy(() => import('./pages/MatchHistoryPage'));
+const MatchDetailsPage = lazy(() => import('./pages/MatchDetailsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+
+const PageLoader = () => (
+  <div className="min-h-[50vh] flex items-center justify-center">
+    <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 // Layout wrapper to hide nav/footer on spectator public scoreboard
 const AppLayout = ({ children }) => {
@@ -34,7 +42,7 @@ const AppLayout = ({ children }) => {
   const isSpectatorScoreboard = location.pathname.startsWith('/live/');
 
   if (isSpectatorScoreboard) {
-    return <ErrorBoundary>{children}</ErrorBoundary>;
+    return <ErrorBoundary><Suspense fallback={<PageLoader />}>{children}</Suspense></ErrorBoundary>;
   }
 
   return (
@@ -42,7 +50,9 @@ const AppLayout = ({ children }) => {
       <Navbar />
       <main className="flex-1 pb-12">
         <ErrorBoundary>
-          {children}
+          <Suspense fallback={<PageLoader />}>
+            {children}
+          </Suspense>
         </ErrorBoundary>
       </main>
       <Footer />

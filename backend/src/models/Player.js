@@ -57,4 +57,9 @@ const playerSchema = new mongoose.Schema(
   }
 );
 
+// Indexes for fast lookups and leaderboards
+playerSchema.index({ teamId: 1, jerseyNumber: 1 });
+playerSchema.index({ 'stats.points': -1 });
+playerSchema.index({ name: 1 });
+
 module.exports = mongoose.model('Player', playerSchema);

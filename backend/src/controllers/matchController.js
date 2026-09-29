@@ -44,7 +44,8 @@ const getMatches = async (req, res) => {
       .populate('teamA', 'name shortName logo primaryColor secondaryColor')
       .populate('teamB', 'name shortName logo primaryColor secondaryColor')
       .populate('tournamentId', 'name venue')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     if (limit) {
       matchQuery = matchQuery.limit(Number(limit));

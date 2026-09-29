@@ -247,4 +247,10 @@ matchSchema.methods.getCurrentShotClockRemaining = function () {
   return Math.max(0, Math.round((this.shotClockRemaining - elapsedSeconds) * 10) / 10);
 };
 
+// Indexes for fast lookups
+matchSchema.index({ status: 1, createdAt: -1 });
+matchSchema.index({ tournamentId: 1, createdAt: -1 });
+matchSchema.index({ matchType: 1, status: 1 });
+matchSchema.index({ teamA: 1, teamB: 1 });
+
 module.exports = mongoose.model('Match', matchSchema);
