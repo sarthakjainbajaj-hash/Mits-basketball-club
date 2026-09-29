@@ -20,11 +20,28 @@ const matchRoutes = require('./routes/matchRoutes');
 const app = express();
 const server = http.createServer(app);
 
+const path = require('path');
+const fs = require('fs');
+
 // Configure Socket.IO
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const allowedOrigins = [
+  clientUrl,
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+];
+
+const corsOriginHandler = (origin, callback) => {
+  if (!origin || allowedOrigins.includes(origin) || origin.includes('onrender.com') || origin.includes('vercel.app')) {
+    return callback(null, true);
+  }
+  return callback(null, true);
+};
+
 const io = new Server(server, {
   cors: {
-    origin: [clientUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: corsOriginHandler,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   },
@@ -39,7 +56,7 @@ initMatchSocket(io);
 // Core Middleware
 app.use(
   cors({
-    origin: [clientUrl, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: corsOriginHandler,
     credentials: true,
   })
 );
@@ -62,6 +79,18 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/matches', matchRoutes);
+
+// Serve static frontend build when dist directory exists
+const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
 
 // Error Handling Middleware
 app.use(notFound);
