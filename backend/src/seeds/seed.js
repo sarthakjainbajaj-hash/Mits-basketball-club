@@ -37,7 +37,7 @@ const seedData = async () => {
 
     console.log('[Seed] Creating Users...');
     const admin = await User.create({
-      name: 'Elena Rostova (Admin)',
+      name: 'Sarthak Bajaj',
       email: 'admin@hoopscore.com',
       password: 'admin123',
       role: 'admin',

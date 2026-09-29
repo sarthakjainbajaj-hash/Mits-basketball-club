@@ -35,7 +35,7 @@ const clearDummyData = async () => {
     let admin = await User.findOne({ email: 'admin@hoopscore.com' });
     if (!admin) {
       admin = await User.create({
-        name: 'Elena Rostova (Admin)',
+        name: 'Sarthak Bajaj',
         email: 'admin@hoopscore.com',
         password: 'admin123',
         role: 'admin',
