@@ -32,6 +32,16 @@ const teamSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    captain: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    viceCaptain: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     players: [
       {
         type: mongoose.Schema.Types.ObjectId,

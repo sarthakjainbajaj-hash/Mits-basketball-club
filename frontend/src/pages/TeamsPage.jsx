@@ -31,9 +31,16 @@ const TeamsPage = () => {
     logo: '',
     primaryColor: '#FF5722',
     secondaryColor: '#1E293B',
-    coach: '',
+    captain: '',
+    captainJersey: 7,
+    captainPosition: 'Guard',
+    captainPlayerId: null,
+    viceCaptain: '',
+    viceCaptainJersey: 11,
+    viceCaptainPosition: 'Forward',
+    viceCaptainPlayerId: null,
   });
-  const [playersList, setPlayersList] = useState([]);
+  const [additionalPlayers, setAdditionalPlayers] = useState([]);
 
   useEffect(() => {
     fetchTeams();
@@ -64,12 +71,17 @@ const TeamsPage = () => {
       logo: '',
       primaryColor: '#FF5722',
       secondaryColor: '#1E293B',
-      coach: '',
+      captain: '',
+      captainJersey: 7,
+      captainPosition: 'Guard',
+      captainPlayerId: null,
+      viceCaptain: '',
+      viceCaptainJersey: 11,
+      viceCaptainPosition: 'Forward',
+      viceCaptainPlayerId: null,
     });
-    // Default 4 player slots ready to be named immediately
-    setPlayersList([
-      { name: '', jerseyNumber: 7, position: 'Guard' },
-      { name: '', jerseyNumber: 11, position: 'Forward' },
+    // Default 2 additional members ready so with Captain + VC they make 4 players for 3x3!
+    setAdditionalPlayers([
       { name: '', jerseyNumber: 23, position: 'Forward' },
       { name: '', jerseyNumber: 15, position: 'Center' },
     ]);
@@ -78,16 +90,38 @@ const TeamsPage = () => {
 
   const openEditModal = (team) => {
     setEditingTeam(team);
+    const capPlayer = (team.players || []).find((p) => p.isCaptain || p.name?.includes('(C)'));
+    const vcPlayer = (team.players || []).find((p) => p.isViceCaptain || p.name?.includes('(VC)'));
+
+    const rawCap =
+      team.captain ||
+      (capPlayer ? capPlayer.name.replace(/\s*\(C\)/gi, '').trim() : team.coach || '');
+    const rawVC =
+      team.viceCaptain ||
+      (vcPlayer ? vcPlayer.name.replace(/\s*\(VC\)/gi, '').trim() : '');
+
     setFormData({
       name: team.name,
       shortName: team.shortName,
       logo: team.logo || '',
       primaryColor: team.primaryColor || '#FF5722',
       secondaryColor: team.secondaryColor || '#1E293B',
-      coach: team.coach || '',
+      captain: rawCap,
+      captainJersey: capPlayer ? capPlayer.jerseyNumber : 7,
+      captainPosition: capPlayer ? capPlayer.position : 'Guard',
+      captainPlayerId: capPlayer?._id || null,
+      viceCaptain: rawVC,
+      viceCaptainJersey: vcPlayer ? vcPlayer.jerseyNumber : 11,
+      viceCaptainPosition: vcPlayer ? vcPlayer.position : 'Forward',
+      viceCaptainPlayerId: vcPlayer?._id || null,
     });
-    setPlayersList(
-      (team.players || []).map((p) => ({
+
+    const otherPlayers = (team.players || []).filter(
+      (p) => p._id !== capPlayer?._id && p._id !== vcPlayer?._id
+    );
+
+    setAdditionalPlayers(
+      otherPlayers.map((p) => ({
         _id: p._id,
         name: p.name || '',
         jerseyNumber: p.jerseyNumber !== undefined ? p.jerseyNumber : 0,
@@ -97,78 +131,134 @@ const TeamsPage = () => {
     setIsModalOpen(true);
   };
 
-  const handleAddPlayer = () => {
-    const nextJersey =
-      playersList.length > 0
-        ? (Math.max(...playersList.map((p) => Number(p.jerseyNumber) || 0)) + 1) % 100
-        : 1;
-    setPlayersList([
-      ...playersList,
-      { name: '', jerseyNumber: nextJersey, position: 'Guard' },
+  const handleAddAdditionalPlayer = () => {
+    const existing = [
+      Number(formData.captainJersey) || 7,
+      formData.viceCaptain.trim() ? Number(formData.viceCaptainJersey) || 11 : -1,
+      ...additionalPlayers.map((p) => Number(p.jerseyNumber) || 0),
+    ];
+    let nextJersey = 0;
+    while (existing.includes(nextJersey) && nextJersey <= 99) {
+      nextJersey++;
+    }
+    setAdditionalPlayers([
+      ...additionalPlayers,
+      { name: '', jerseyNumber: nextJersey, position: 'Forward' },
     ]);
   };
 
   const handleLoad3x3Template = () => {
-    setPlayersList([
-      { name: '', jerseyNumber: 7, position: 'Guard' },
-      { name: '', jerseyNumber: 11, position: 'Forward' },
-      { name: '', jerseyNumber: 23, position: 'Forward' },
-      { name: '', jerseyNumber: 15, position: 'Center' },
-    ]);
+    const leadershipCount = 1 + (formData.viceCaptain.trim() ? 1 : 0);
+    const needed = Math.max(1, 4 - leadershipCount);
+    const defaultJerseys = [23, 15, 33, 45];
+    const newMembers = [];
+    for (let i = 0; i < needed; i++) {
+      newMembers.push({
+        name: '',
+        jerseyNumber: defaultJerseys[i] || i + 20,
+        position: i === 0 ? 'Forward' : 'Center',
+      });
+    }
+    setAdditionalPlayers(newMembers);
   };
 
   const handleLoad5x5Template = () => {
-    setPlayersList([
-      { name: '', jerseyNumber: 0, position: 'Guard' },
-      { name: '', jerseyNumber: 1, position: 'Guard' },
-      { name: '', jerseyNumber: 3, position: 'Forward' },
-      { name: '', jerseyNumber: 7, position: 'Forward' },
-      { name: '', jerseyNumber: 15, position: 'Center' },
-      { name: '', jerseyNumber: 21, position: 'Guard' },
-      { name: '', jerseyNumber: 23, position: 'Forward' },
-      { name: '', jerseyNumber: 33, position: 'Center' },
-      { name: '', jerseyNumber: 45, position: 'Guard' },
-      { name: '', jerseyNumber: 77, position: 'Forward' },
-    ]);
+    const leadershipCount = 1 + (formData.viceCaptain.trim() ? 1 : 0);
+    const needed = Math.max(1, 10 - leadershipCount);
+    const defaultJerseys = [3, 5, 15, 21, 23, 33, 45, 77, 99];
+    const positions = ['Guard', 'Forward', 'Center', 'Guard', 'Forward', 'Center', 'Guard', 'Forward', 'Center'];
+    const newMembers = [];
+    for (let i = 0; i < needed; i++) {
+      newMembers.push({
+        name: '',
+        jerseyNumber: defaultJerseys[i] || i + 2,
+        position: positions[i % positions.length],
+      });
+    }
+    setAdditionalPlayers(newMembers);
   };
 
-  const handlePlayerChange = (index, field, value) => {
-    const updated = [...playersList];
+  const handleAdditionalPlayerChange = (index, field, value) => {
+    const updated = [...additionalPlayers];
     updated[index] = { ...updated[index], [field]: value };
-    setPlayersList(updated);
+    setAdditionalPlayers(updated);
   };
 
-  const handleRemovePlayer = (index) => {
-    setPlayersList(playersList.filter((_, i) => i !== index));
+  const handleRemoveAdditionalPlayer = (index) => {
+    setAdditionalPlayers(additionalPlayers.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Filter out completely blank players
-      const validPlayers = playersList
-        .filter((p) => p.name && p.name.trim().length > 0)
-        .map((p) => ({
-          ...p,
-          name: p.name.trim(),
-          jerseyNumber: parseInt(p.jerseyNumber, 10) || 0,
-        }));
+      const cleanCap = formData.captain.replace(/\s*\(C\)/gi, '').trim();
+      const cleanVC = formData.viceCaptain.replace(/\s*\(VC\)/gi, '').trim();
+
+      if (!cleanCap) {
+        setToast({ message: 'Captain name is required!', type: 'error' });
+        return;
+      }
+
+      const validPlayers = [];
+
+      // 1. Captain (Member #1)
+      validPlayers.push({
+        _id: formData.captainPlayerId || undefined,
+        name: `${cleanCap} (C)`,
+        jerseyNumber: parseInt(formData.captainJersey, 10) || 7,
+        position: formData.captainPosition || 'Guard',
+        isCaptain: true,
+        isViceCaptain: false,
+      });
+
+      // 2. Vice-Captain (Member #2, if provided)
+      if (cleanVC) {
+        validPlayers.push({
+          _id: formData.viceCaptainPlayerId || undefined,
+          name: `${cleanVC} (VC)`,
+          jerseyNumber: parseInt(formData.viceCaptainJersey, 10) || 11,
+          position: formData.viceCaptainPosition || 'Forward',
+          isCaptain: false,
+          isViceCaptain: true,
+        });
+      }
+
+      // 3. Additional Team Members
+      for (const p of additionalPlayers) {
+        if (p.name && p.name.trim()) {
+          validPlayers.push({
+            _id: p._id || undefined,
+            name: p.name.trim(),
+            jerseyNumber: parseInt(p.jerseyNumber, 10) || 0,
+            position: p.position || 'Guard',
+            isCaptain: false,
+            isViceCaptain: false,
+          });
+        }
+      }
 
       const payload = {
-        ...formData,
+        name: formData.name.trim(),
+        shortName: formData.shortName.toUpperCase().trim(),
+        logo: formData.logo,
+        primaryColor: formData.primaryColor,
+        secondaryColor: formData.secondaryColor,
+        captain: cleanCap,
+        viceCaptain: cleanVC,
+        coach: cleanCap,
         players: validPlayers,
       };
 
       if (editingTeam) {
         await teamApi.update(editingTeam._id, payload);
         setToast({
-          message: `Team "${formData.name}" and ${validPlayers.length} players saved successfully!`,
+          message: `Team "${formData.name}" and ${validPlayers.length} players (Captain & Squad) updated!`,
           type: 'success',
         });
       } else {
         await teamApi.create(payload);
         setToast({
-          message: `Team "${formData.name}" created with ${validPlayers.length} players!`,
+          message: `Team "${formData.name}" created with ${validPlayers.length} players (Captain & Squad)!`,
           type: 'success',
         });
       }
@@ -213,7 +303,7 @@ const TeamsPage = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search team or coach..."
+              placeholder="Search team, captain, or code..."
               className="pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 w-48 sm:w-64"
             />
           </form>
@@ -263,11 +353,28 @@ const TeamsPage = () => {
                       <h3 className="font-bold text-white text-lg group-hover:text-orange-400 transition-colors">
                         {t.name}
                       </h3>
-                      <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono text-slate-400 mt-0.5">
                         <span className="bg-slate-800 px-1.5 py-0.5 rounded text-amber-400 font-bold">
                           {t.shortName}
                         </span>
-                        {t.coach && <span>Coach: {t.coach}</span>}
+                        {t.captain ? (
+                          <span className="text-amber-300 font-bold flex items-center gap-1">
+                            <span>👑</span> {t.captain}{' '}
+                            <span className="text-[10px] bg-amber-500/20 px-1 rounded text-amber-300 border border-amber-500/30">
+                              C
+                            </span>
+                          </span>
+                        ) : t.coach ? (
+                          <span>Coach: {t.coach}</span>
+                        ) : null}
+                        {t.viceCaptain && (
+                          <span className="text-cyan-300 font-medium flex items-center gap-1">
+                            <span>🥈</span> {t.viceCaptain}{' '}
+                            <span className="text-[10px] bg-cyan-500/20 px-1 rounded text-cyan-300 border border-cyan-500/30">
+                              VC
+                            </span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -422,20 +529,7 @@ const TeamsPage = () => {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
-                      Head Coach
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.coach}
-                      onChange={(e) => setFormData({ ...formData, coach: e.target.value })}
-                      placeholder="e.g. Vikram Mehta"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
                       Logo URL (Optional)
                     </label>
@@ -446,6 +540,113 @@ const TeamsPage = () => {
                       placeholder="https://... logo image url"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
                     />
+                  </div>
+                </div>
+
+                {/* Team Captain & Vice-Captain Leadership Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  {/* Captain Input */}
+                  <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-mono uppercase font-bold text-amber-400">
+                        👑 Team Captain (C) * (Member #1)
+                      </label>
+                      <span className="text-[10px] font-mono text-amber-400/80 bg-amber-950 px-2 py-0.5 rounded border border-amber-500/30">
+                        Auto-added as Player
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-7">
+                        <input
+                          type="text"
+                          value={formData.captain}
+                          onChange={(e) => setFormData({ ...formData, captain: e.target.value })}
+                          placeholder="e.g. Atharv"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-amber-500/50 text-white text-sm focus:border-amber-400 outline-none"
+                          required
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="99"
+                          value={formData.captainJersey}
+                          onChange={(e) =>
+                            setFormData({ ...formData, captainJersey: e.target.value })
+                          }
+                          title="Captain Jersey #"
+                          placeholder="7"
+                          className="w-full px-1 py-2 rounded-xl bg-slate-950 border border-amber-500/50 font-digital font-bold text-amber-400 text-sm text-center outline-none"
+                          required
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <select
+                          value={formData.captainPosition}
+                          onChange={(e) =>
+                            setFormData({ ...formData, captainPosition: e.target.value })
+                          }
+                          className="w-full px-1 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono outline-none"
+                        >
+                          <option value="Guard">Guard</option>
+                          <option value="Forward">Forward</option>
+                          <option value="Center">Center</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vice-Captain Input (Optional) */}
+                  <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-mono uppercase font-bold text-cyan-400">
+                        🥈 Vice-Captain (VC) [Optional] (Member #2)
+                      </label>
+                      <span className="text-[10px] font-mono text-cyan-400/80 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-500/30">
+                        Optional Player
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-7">
+                        <input
+                          type="text"
+                          value={formData.viceCaptain}
+                          onChange={(e) =>
+                            setFormData({ ...formData, viceCaptain: e.target.value })
+                          }
+                          placeholder="e.g. Rohan (optional)"
+                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-cyan-500/50 text-white text-sm focus:border-cyan-400 outline-none"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="99"
+                          value={formData.viceCaptainJersey}
+                          onChange={(e) =>
+                            setFormData({ ...formData, viceCaptainJersey: e.target.value })
+                          }
+                          title="Vice-Captain Jersey #"
+                          placeholder="11"
+                          className="w-full px-1 py-2 rounded-xl bg-slate-950 border border-cyan-500/50 font-digital font-bold text-cyan-400 text-sm text-center outline-none"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <select
+                          value={formData.viceCaptainPosition}
+                          onChange={(e) =>
+                            setFormData({ ...formData, viceCaptainPosition: e.target.value })
+                          }
+                          className="w-full px-1 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono outline-none"
+                        >
+                          <option value="Guard">Guard</option>
+                          <option value="Forward">Forward</option>
+                          <option value="Center">Center</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -488,8 +689,11 @@ const TeamsPage = () => {
                     <span className="text-xs font-mono uppercase font-black text-cyan-400 tracking-wider">
                       2. Team Players Roster
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 text-[11px] font-mono font-bold">
-                      {playersList.length} Players
+                    <span className="px-2.5 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 text-[11px] font-mono font-bold">
+                      {(formData.captain.trim() ? 1 : 0) +
+                        (formData.viceCaptain.trim() ? 1 : 0) +
+                        additionalPlayers.filter((p) => p.name && p.name.trim()).length}{' '}
+                      Players Registered
                     </span>
                   </div>
 
@@ -499,7 +703,7 @@ const TeamsPage = () => {
                       type="button"
                       onClick={handleLoad3x3Template}
                       className="px-2.5 py-1 rounded-lg bg-orange-950/60 hover:bg-orange-900 border border-orange-700/60 text-orange-300 text-[11px] font-mono font-bold transition-colors"
-                      title="Fill 4 player slots for 3x3"
+                      title="Populate 4 players total (including Captain & Vice-Captain)"
                     >
                       ⚡ 3x3 Roster (4)
                     </button>
@@ -507,44 +711,166 @@ const TeamsPage = () => {
                       type="button"
                       onClick={handleLoad5x5Template}
                       className="px-2.5 py-1 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-700/60 text-blue-300 text-[11px] font-mono font-bold transition-colors"
-                      title="Fill 10 player slots for 5x5"
+                      title="Populate 10 players total (including Captain & Vice-Captain)"
                     >
                       ⚡ 5x5 Roster (10)
                     </button>
                     <button
                       type="button"
-                      onClick={handleAddPlayer}
+                      onClick={handleAddAdditionalPlayer}
                       className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold shadow-md transition-colors"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Add Player
+                      <Plus className="w-3.5 h-3.5" /> Add Member
                     </button>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-400">
-                  Enter all player names, jersey numbers, and positions. Players will be automatically created and registered to this team.
+                  Captain and Vice-Captain automatically count as players with{' '}
+                  <span className="text-amber-400 font-bold">(C)</span> and{' '}
+                  <span className="text-cyan-400 font-bold">(VC)</span> tags. No need to re-add them below!
                 </p>
 
                 {/* Player Rows List */}
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {playersList.length > 0 ? (
-                    playersList.map((player, idx) => (
+                  {/* 1. Captain (Member #1) */}
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-amber-950/30 border border-amber-500/40">
+                    <span className="w-6 text-center text-xs font-mono font-bold text-amber-400">
+                      1
+                    </span>
+
+                    <div className="w-20">
+                      <input
+                        type="number"
+                        min="0"
+                        max="99"
+                        value={formData.captainJersey}
+                        onChange={(e) =>
+                          setFormData({ ...formData, captainJersey: e.target.value })
+                        }
+                        placeholder="#"
+                        title="Captain Jersey Number"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-amber-500/60 text-amber-400 font-digital font-bold text-center text-sm outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-between text-sm">
+                        <span className="text-white font-bold">
+                          {formData.captain.trim()
+                            ? `${formData.captain.replace(/\s*\(C\)/gi, '').trim()} (C)`
+                            : 'Enter Captain Name in section 1 above'}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-mono font-black">
+                          C • CAPTAIN
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="w-28">
+                      <select
+                        value={formData.captainPosition}
+                        onChange={(e) =>
+                          setFormData({ ...formData, captainPosition: e.target.value })
+                        }
+                        className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono outline-none cursor-pointer"
+                      >
+                        <option value="Guard">Guard</option>
+                        <option value="Forward">Forward</option>
+                        <option value="Center">Center</option>
+                      </select>
+                    </div>
+
+                    <div
+                      className="w-8 flex justify-center text-amber-400"
+                      title="Captain is automatically member #1"
+                    >
+                      👑
+                    </div>
+                  </div>
+
+                  {/* 2. Vice-Captain (Member #2) - Included if provided */}
+                  {formData.viceCaptain.trim() && (
+                    <div className="flex items-center gap-2 p-2 rounded-xl bg-cyan-950/30 border border-cyan-500/40">
+                      <span className="w-6 text-center text-xs font-mono font-bold text-cyan-400">
+                        2
+                      </span>
+
+                      <div className="w-20">
+                        <input
+                          type="number"
+                          min="0"
+                          max="99"
+                          value={formData.viceCaptainJersey}
+                          onChange={(e) =>
+                            setFormData({ ...formData, viceCaptainJersey: e.target.value })
+                          }
+                          placeholder="#"
+                          title="Vice-Captain Jersey Number"
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/60 text-cyan-400 font-digital font-bold text-center text-sm outline-none"
+                        />
+                      </div>
+
+                      <div className="flex-1">
+                        <div className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-between text-sm">
+                          <span className="text-white font-bold">
+                            {formData.viceCaptain.replace(/\s*\(VC\)/gi, '').trim()} (VC)
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[10px] font-mono font-black">
+                            VC • VICE-CAPTAIN
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-28">
+                        <select
+                          value={formData.viceCaptainPosition}
+                          onChange={(e) =>
+                            setFormData({ ...formData, viceCaptainPosition: e.target.value })
+                          }
+                          className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono outline-none cursor-pointer"
+                        >
+                          <option value="Guard">Guard</option>
+                          <option value="Forward">Forward</option>
+                          <option value="Center">Center</option>
+                        </select>
+                      </div>
+
+                      <div
+                        className="w-8 flex justify-center text-cyan-400"
+                        title="Vice-Captain is automatically member #2"
+                      >
+                        🥈
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. Additional Members */}
+                  {additionalPlayers.map((player, idx) => {
+                    const displayIndex =
+                      (formData.captain.trim() ? 1 : 0) +
+                      (formData.viceCaptain.trim() ? 1 : 0) +
+                      idx +
+                      1;
+                    return (
                       <div
                         key={idx}
                         className="flex items-center gap-2 p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-colors"
                       >
                         <span className="w-6 text-center text-xs font-mono font-bold text-slate-500">
-                          {idx + 1}
+                          {displayIndex}
                         </span>
 
-                        {/* Jersey Number */}
                         <div className="w-20">
                           <input
                             type="number"
                             min="0"
                             max="99"
                             value={player.jerseyNumber}
-                            onChange={(e) => handlePlayerChange(idx, 'jerseyNumber', e.target.value)}
+                            onChange={(e) =>
+                              handleAdditionalPlayerChange(idx, 'jerseyNumber', e.target.value)
+                            }
                             placeholder="#"
                             title="Jersey Number (0-99)"
                             className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-amber-400 font-digital font-bold text-center text-sm outline-none focus:border-amber-400"
@@ -552,22 +878,24 @@ const TeamsPage = () => {
                           />
                         </div>
 
-                        {/* Player Name */}
                         <div className="flex-1">
                           <input
                             type="text"
                             value={player.name}
-                            onChange={(e) => handlePlayerChange(idx, 'name', e.target.value)}
-                            placeholder={`Player ${idx + 1} full name (e.g. Rahul Sharma)`}
+                            onChange={(e) =>
+                              handleAdditionalPlayerChange(idx, 'name', e.target.value)
+                            }
+                            placeholder={`Member ${displayIndex} full name (e.g. Rahul Sharma)`}
                             className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm outline-none focus:border-orange-500"
                           />
                         </div>
 
-                        {/* Position */}
                         <div className="w-28">
                           <select
                             value={player.position}
-                            onChange={(e) => handlePlayerChange(idx, 'position', e.target.value)}
+                            onChange={(e) =>
+                              handleAdditionalPlayerChange(idx, 'position', e.target.value)
+                            }
                             className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono outline-none focus:border-orange-500 cursor-pointer"
                           >
                             <option value="Guard">Guard</option>
@@ -576,33 +904,30 @@ const TeamsPage = () => {
                           </select>
                         </div>
 
-                        {/* Remove Button */}
                         <button
                           type="button"
-                          onClick={() => handleRemovePlayer(idx)}
+                          onClick={() => handleRemoveAdditionalPlayer(idx)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/30 transition-colors"
                           title="Remove player"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-6 text-center rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 space-y-2">
-                      <Users className="w-8 h-8 text-slate-600 mx-auto" />
-                      <p className="text-sm font-bold text-slate-300">No players added yet</p>
-                      <p className="text-xs text-slate-500">
-                        Click "+ Add Player" or choose a quick 3x3 / 5x5 template above to enter player names.
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Modal Footer */}
               <div className="flex items-center justify-between pt-4 border-t border-slate-800 bg-slate-900">
                 <div className="text-xs font-mono text-slate-400">
-                  {playersList.filter((p) => p.name && p.name.trim()).length} valid player(s) ready to save
+                  Total:{' '}
+                  <span className="text-white font-bold">
+                    {(formData.captain.trim() ? 1 : 0) +
+                      (formData.viceCaptain.trim() ? 1 : 0) +
+                      additionalPlayers.filter((p) => p.name && p.name.trim()).length}
+                  </span>{' '}
+                  player(s) ready to save (including Captain & Vice-Captain)
                 </div>
                 <div className="flex items-center gap-2">
                   <button

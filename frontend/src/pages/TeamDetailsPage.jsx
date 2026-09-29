@@ -31,6 +31,8 @@ const TeamDetailsPage = () => {
     name: '',
     jerseyNumber: '',
     position: 'Guard',
+    isCaptain: false,
+    isViceCaptain: false,
   });
 
   useEffect(() => {
@@ -59,6 +61,8 @@ const TeamDetailsPage = () => {
       name: '',
       jerseyNumber: nextJersey,
       position: 'Guard',
+      isCaptain: false,
+      isViceCaptain: false,
     });
     setIsAddPlayerModalOpen(true);
   };
@@ -68,14 +72,31 @@ const TeamDetailsPage = () => {
     if (!newPlayerData.name.trim()) return;
 
     try {
+      let finalName = newPlayerData.name.trim();
+      if (newPlayerData.isCaptain && !finalName.includes('(C)')) {
+        finalName = `${finalName.replace(/\s*\(VC\)/gi, '')} (C)`;
+      } else if (newPlayerData.isViceCaptain && !finalName.includes('(VC)')) {
+        finalName = `${finalName.replace(/\s*\(C\)/gi, '')} (VC)`;
+      }
+
       await playerApi.create({
-        name: newPlayerData.name.trim(),
+        name: finalName,
         jerseyNumber: parseInt(newPlayerData.jerseyNumber, 10) || 0,
         position: newPlayerData.position,
         teamId: id,
+        isCaptain: newPlayerData.isCaptain,
+        isViceCaptain: newPlayerData.isViceCaptain,
       });
+
+      // If marked as captain or vice captain, sync on team document
+      if (newPlayerData.isCaptain) {
+        await teamApi.update(id, { captain: finalName.replace(/\s*\(C\)/gi, '').trim() });
+      } else if (newPlayerData.isViceCaptain) {
+        await teamApi.update(id, { viceCaptain: finalName.replace(/\s*\(VC\)/gi, '').trim() });
+      }
+
       setToast({
-        message: `Player "${newPlayerData.name}" successfully added to roster!`,
+        message: `Player "${finalName}" successfully added to roster!`,
         type: 'success',
       });
       setIsAddPlayerModalOpen(false);
@@ -169,9 +190,18 @@ const TeamDetailsPage = () => {
               <span className="font-digital font-bold text-xs uppercase px-2.5 py-1 rounded-md bg-slate-800 text-amber-400 border border-slate-700">
                 {team.shortName}
               </span>
-              {team.coach && (
+              {team.captain ? (
+                <span className="text-xs font-mono text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2.5 py-1 rounded-md font-bold flex items-center gap-1">
+                  <span>👑</span> Captain: {team.captain} (C)
+                </span>
+              ) : team.coach ? (
                 <span className="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-md">
                   Coach: {team.coach}
+                </span>
+              ) : null}
+              {team.viceCaptain && (
+                <span className="text-xs font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-500/30 px-2.5 py-1 rounded-md font-bold flex items-center gap-1">
+                  <span>🥈</span> Vice-Captain: {team.viceCaptain} (VC)
                 </span>
               )}
             </div>
@@ -286,7 +316,19 @@ const TeamDetailsPage = () => {
                       #{p.jerseyNumber}
                     </span>
                     <div>
-                      <h4 className="font-bold text-white text-sm">{p.name}</h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-white text-sm">{p.name}</h4>
+                        {(p.isCaptain || p.name.includes('(C)') || (team.captain && p.name.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase() === team.captain.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase())) && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-mono font-black flex items-center gap-1">
+                            👑 <span>(C) CAPTAIN</span>
+                          </span>
+                        )}
+                        {(p.isViceCaptain || p.name.includes('(VC)') || (team.viceCaptain && p.name.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase() === team.viceCaptain.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase())) && (
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[10px] font-mono font-black flex items-center gap-1">
+                            🥈 <span>(VC) VICE-CAPTAIN</span>
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-400 font-mono">
                         {p.position || 'Player'} • {p.stats?.games || 0} Games
                       </p>
@@ -440,6 +482,48 @@ const TeamDetailsPage = () => {
                     <option value="Center">Center</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Captain / Vice Captain designation checkboxes */}
+              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-[11px] font-mono uppercase font-bold text-slate-400 block mb-1">
+                  Leadership Designation (Optional)
+                </span>
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 hover:text-white select-none">
+                  <input
+                    type="checkbox"
+                    checked={newPlayerData.isCaptain}
+                    onChange={(e) =>
+                      setNewPlayerData({
+                        ...newPlayerData,
+                        isCaptain: e.target.checked,
+                        isViceCaptain: e.target.checked ? false : newPlayerData.isViceCaptain,
+                      })
+                    }
+                    className="rounded border-slate-700 text-orange-600 focus:ring-0"
+                  />
+                  <span className="flex items-center gap-1 font-bold text-amber-400">
+                    👑 Make Team Captain (C)
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 hover:text-white select-none">
+                  <input
+                    type="checkbox"
+                    checked={newPlayerData.isViceCaptain}
+                    onChange={(e) =>
+                      setNewPlayerData({
+                        ...newPlayerData,
+                        isViceCaptain: e.target.checked,
+                        isCaptain: e.target.checked ? false : newPlayerData.isCaptain,
+                      })
+                    }
+                    className="rounded border-slate-700 text-cyan-600 focus:ring-0"
+                  />
+                  <span className="flex items-center gap-1 font-bold text-cyan-400">
+                    🥈 Make Team Vice-Captain (VC)
+                  </span>
+                </label>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">

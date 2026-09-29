@@ -15,6 +15,8 @@ const getTeams = async (req, res) => {
         $or: [
           { name: { $regex: search, $options: 'i' } },
           { shortName: { $regex: search, $options: 'i' } },
+          { captain: { $regex: search, $options: 'i' } },
+          { viceCaptain: { $regex: search, $options: 'i' } },
           { coach: { $regex: search, $options: 'i' } },
         ],
       };
@@ -59,11 +61,12 @@ const getTeamById = async (req, res) => {
 };
 
 // @desc    Create new team (with optional initial players)
+// @desc    Create new team (with optional initial players)
 // @route   POST /api/teams
 // @access  Private/Admin
 const createTeam = async (req, res) => {
   try {
-    const { name, shortName, logo, primaryColor, secondaryColor, coach, players } = req.body;
+    const { name, shortName, logo, primaryColor, secondaryColor, coach, captain, viceCaptain, players } = req.body;
 
     if (!name || !shortName) {
       return res.status(400).json({
@@ -80,13 +83,18 @@ const createTeam = async (req, res) => {
       });
     }
 
+    const captainName = captain ? captain.trim() : (coach ? coach.trim() : '');
+    const viceCaptainName = viceCaptain ? viceCaptain.trim() : '';
+
     const team = await Team.create({
       name: name.trim(),
       shortName: shortName.toUpperCase().trim(),
       logo: logo || '',
       primaryColor: primaryColor || '#FF5722',
       secondaryColor: secondaryColor || '#1E293B',
-      coach: coach || '',
+      coach: captainName, // backwards-compatibility
+      captain: captainName,
+      viceCaptain: viceCaptainName,
     });
 
     // If players list provided, create players linked to this team
@@ -105,12 +113,17 @@ const createTeam = async (req, res) => {
         }
         usedJerseys.add(jNum);
 
+        const isCap = Boolean(p.isCaptain || p.name.includes('(C)'));
+        const isVC = Boolean(p.isViceCaptain || p.name.includes('(VC)'));
+
         const newPlayer = await Player.create({
           name: p.name.trim(),
           jerseyNumber: jNum,
           position: ['Guard', 'Forward', 'Center'].includes(p.position) ? p.position : 'Guard',
           teamId: team._id,
           profileImage: p.profileImage || '',
+          isCaptain: isCap,
+          isViceCaptain: isVC,
         });
         createdPlayerIds.push(newPlayer._id);
       }
@@ -131,7 +144,7 @@ const createTeam = async (req, res) => {
 // @access  Private/Admin
 const updateTeam = async (req, res) => {
   try {
-    const { name, shortName, logo, primaryColor, secondaryColor, coach, players } = req.body;
+    const { name, shortName, logo, primaryColor, secondaryColor, coach, captain, viceCaptain, players } = req.body;
 
     let team = await Team.findById(req.params.id);
     if (!team) {
@@ -156,7 +169,14 @@ const updateTeam = async (req, res) => {
     if (logo !== undefined) team.logo = logo;
     if (primaryColor) team.primaryColor = primaryColor;
     if (secondaryColor) team.secondaryColor = secondaryColor;
-    if (coach !== undefined) team.coach = coach;
+    if (captain !== undefined) {
+      team.captain = captain.trim();
+      team.coach = captain.trim();
+    } else if (coach !== undefined) {
+      team.coach = coach;
+      team.captain = coach;
+    }
+    if (viceCaptain !== undefined) team.viceCaptain = viceCaptain.trim();
 
     // Synchronize players if array was provided
     if (Array.isArray(players)) {
@@ -174,6 +194,9 @@ const updateTeam = async (req, res) => {
         }
         usedJerseys.add(jNum);
 
+        const isCap = Boolean(p.isCaptain || p.name.includes('(C)'));
+        const isVC = Boolean(p.isViceCaptain || p.name.includes('(VC)'));
+
         if (p._id) {
           // Update existing player
           const updatedP = await Player.findByIdAndUpdate(
@@ -183,6 +206,8 @@ const updateTeam = async (req, res) => {
               jerseyNumber: jNum,
               position: ['Guard', 'Forward', 'Center'].includes(p.position) ? p.position : 'Guard',
               teamId: team._id,
+              isCaptain: isCap,
+              isViceCaptain: isVC,
             },
             { new: true }
           );
@@ -195,6 +220,8 @@ const updateTeam = async (req, res) => {
             position: ['Guard', 'Forward', 'Center'].includes(p.position) ? p.position : 'Guard',
             teamId: team._id,
             profileImage: p.profileImage || '',
+            isCaptain: isCap,
+            isViceCaptain: isVC,
           });
           activePlayerIds.push(newPlayer._id);
         }

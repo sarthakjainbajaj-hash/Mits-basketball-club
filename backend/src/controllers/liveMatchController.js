@@ -11,27 +11,34 @@ const formatTime = (seconds) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-// Helper to broadcast match update with populated fields
+// Helper to fetch fully populated match object with live computed remaining times
+const getFullMatchData = async (matchId) => {
+  const populatedMatch = await Match.findById(matchId)
+    .populate('teamA', 'name shortName logo primaryColor secondaryColor coach captain viceCaptain')
+    .populate('teamB', 'name shortName logo primaryColor secondaryColor coach captain viceCaptain')
+    .populate('tournamentId', 'name venue')
+    .populate('playersA.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
+    .populate('playersB.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
+    .populate('teamA_roster.starters.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
+    .populate('teamA_roster.substitutes.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
+    .populate('teamB_roster.starters.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
+    .populate('teamB_roster.substitutes.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain');
+
+  if (!populatedMatch) return null;
+
+  const responseData = populatedMatch.toObject();
+  responseData.remainingTime = populatedMatch.getCurrentRemainingTime();
+  responseData.shotClockRemaining = populatedMatch.getCurrentShotClockRemaining();
+  return responseData;
+};
+
 // Helper to broadcast match update with populated fields
 const broadcastState = async (req, match, latestEvent = null) => {
   const io = req.app.get('io');
   if (!io) return;
 
-  const populatedMatch = await Match.findById(match._id)
-    .populate('teamA', 'name shortName logo primaryColor secondaryColor')
-    .populate('teamB', 'name shortName logo primaryColor secondaryColor')
-    .populate('tournamentId', 'name venue')
-    .populate('playersA.player', 'name jerseyNumber position profileImage')
-    .populate('playersB.player', 'name jerseyNumber position profileImage')
-    .populate('teamA_roster.starters.player', 'name jerseyNumber position profileImage')
-    .populate('teamA_roster.substitutes.player', 'name jerseyNumber position profileImage')
-    .populate('teamB_roster.starters.player', 'name jerseyNumber position profileImage')
-    .populate('teamB_roster.substitutes.player', 'name jerseyNumber position profileImage');
-
-  // Compute live remaining time
-  const responseData = populatedMatch.toObject();
-  responseData.remainingTime = populatedMatch.getCurrentRemainingTime();
-  responseData.shotClockRemaining = populatedMatch.getCurrentShotClockRemaining();
+  const responseData = await getFullMatchData(match._id);
+  if (!responseData) return;
 
   broadcastMatchState(io, match._id.toString(), responseData, latestEvent);
 };
@@ -213,22 +220,6 @@ const updateScore = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot modify score on a completed match' });
     }
 
-    // Active Player Validation: If roster exists, ensure playerId is on court (starter)
-    if (playerId) {
-      const roster = team === 'A' ? match.teamA_roster : match.teamB_roster;
-      if (roster && roster.starters && roster.starters.length > 0) {
-        const isActivePlayer = roster.starters.some(
-          (p) => p.player.toString() === playerId.toString()
-        );
-        if (!isActivePlayer) {
-          return res.status(400).json({
-            success: false,
-            message: 'Cannot record score for a bench player. Substitute player into the game first.',
-          });
-        }
-      }
-    }
-
     const numPoints = Number(points);
     const prevScoreA = match.scoreA;
     const prevScoreB = match.scoreB;
@@ -238,23 +229,45 @@ const updateScore = async (req, res) => {
     let jerseyNum = null;
 
     if (playerId) {
-      scorerPlayer = await Player.findById(playerId);
+      try {
+        scorerPlayer = await Player.findById(playerId);
+      } catch (e) {
+        // Not a standard MongoDB ObjectId, will match via playerStats below
+      }
+
       if (scorerPlayer) {
         scorerName = scorerPlayer.name;
         jerseyNum = scorerPlayer.jerseyNumber;
       }
     }
 
-    // Apply score change
+    // Apply team score change
     if (team === 'A') {
       match.scoreA = Math.max(0, match.scoreA + numPoints);
     } else {
       match.scoreB = Math.max(0, match.scoreB + numPoints);
     }
 
+    // Ensure playerStats array exists
+    if (!match.playerStats) {
+      match.playerStats = [];
+    }
+
     // Update in-match player stats
-    if (playerId && match.playerStats) {
-      let statEntry = match.playerStats.find((s) => s.playerId.toString() === playerId.toString());
+    if (playerId) {
+      const pidStr = playerId.toString();
+      let statEntry = match.playerStats.find((s) => {
+        const sId = s.playerId ? (s.playerId._id || s.playerId).toString() : '';
+        return sId === pidStr;
+      });
+
+      // Secondary match by name and team if ID didn't match directly
+      if (!statEntry && scorerPlayer) {
+        statEntry = match.playerStats.find(
+          (s) => s.team === team && s.playerName.trim().toLowerCase() === scorerPlayer.name.trim().toLowerCase()
+        );
+      }
+
       if (statEntry) {
         statEntry.points = Math.max(0, statEntry.points + numPoints);
         if (numPoints === 1) {
@@ -275,7 +288,7 @@ const updateScore = async (req, res) => {
           playerId: scorerPlayer._id,
           playerName: scorerPlayer.name,
           jerseyNumber: scorerPlayer.jerseyNumber,
-          teamId: scorerPlayer.teamId,
+          teamId: scorerPlayer.teamId || (team === 'A' ? match.teamA : match.teamB),
           team,
           isStarter: true,
           isActive: true,
@@ -297,7 +310,7 @@ const updateScore = async (req, res) => {
       matchId: match._id,
       type: 'SCORE',
       team,
-      playerId: scorerPlayer ? scorerPlayer._id : null,
+      playerId: scorerPlayer ? scorerPlayer._id : (playerId || null),
       playerName: scorerName,
       jerseyNumber: jerseyNum,
       points: numPoints,
@@ -327,18 +340,26 @@ const updateScore = async (req, res) => {
 
       // Broadcast Game End Buzzer
       const io = req.app.get('io');
-      broadcastBuzzerAlert(io, match._id.toString(), 'GAME_END', {
-        winner: match.winner,
-        finalScore: match.finalScore,
-      });
+      if (io) {
+        broadcastBuzzerAlert(io, match._id.toString(), 'GAME_END', {
+          winner: match.winner,
+          finalScore: match.finalScore,
+        });
+      }
     }
 
     await match.save();
-    await broadcastState(req, match, event);
+
+    // Broadcast and return fully populated state
+    const responseData = await getFullMatchData(match._id);
+    const io = req.app.get('io');
+    if (io && responseData) {
+      broadcastMatchState(io, match._id.toString(), responseData, event);
+    }
 
     res.status(200).json({
       success: true,
-      data: match,
+      data: responseData || match,
       event,
       autoCompleted,
     });
@@ -552,27 +573,23 @@ const recordPlayerStat = async (req, res) => {
     // Active Player Validation
     const startersA = match.teamA_roster?.starters || [];
     const startersB = match.teamB_roster?.starters || [];
-    if (startersA.length > 0 || startersB.length > 0) {
-      const isActivePlayer = [...startersA, ...startersB].some(
-        (p) => p.player.toString() === playerId.toString()
-      );
-      if (!isActivePlayer) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cannot record stat for a bench player. Substitute player into the game first.',
-        });
-      }
-    }
+    const pidStr = playerId.toString();
 
-    const player = await Player.findById(playerId);
-    if (!player) return res.status(404).json({ success: false, message: 'Player not found' });
+    let player = null;
+    try {
+      player = await Player.findById(playerId);
+    } catch (e) {}
 
-    let statEntry = match.playerStats.find((s) => s.playerId.toString() === playerId.toString());
+    let statEntry = match.playerStats.find((s) => {
+      const sId = s.playerId ? (s.playerId._id || s.playerId).toString() : '';
+      return sId === pidStr;
+    });
+
     const delta = change !== undefined ? Number(change) : 1;
 
-    if (!statEntry) {
-      const isTeamA = match.playersA.some((p) => p.player.toString() === playerId.toString()) ||
-        startersA.some((p) => p.player.toString() === playerId.toString());
+    if (!statEntry && player) {
+      const isTeamA = match.playersA.some((p) => (p.player?._id || p.player || '').toString() === pidStr) ||
+        startersA.some((p) => (p.player?._id || p.player || '').toString() === pidStr);
       statEntry = {
         playerId: player._id,
         playerName: player.name,
@@ -594,31 +611,36 @@ const recordPlayerStat = async (req, res) => {
       match.playerStats.push(statEntry);
     }
 
-    if (statEntry[statType] !== undefined) {
+    if (statEntry && statEntry[statType] !== undefined) {
       statEntry[statType] = Math.max(0, statEntry[statType] + delta);
     }
 
     const event = await MatchEvent.create({
       matchId: match._id,
       type: statType.toUpperCase(),
-      team: statEntry.team,
-      playerId: player._id,
-      playerName: player.name,
-      jerseyNumber: player.jerseyNumber,
+      team: statEntry?.team || 'A',
+      playerId: player ? player._id : playerId,
+      playerName: player?.name || statEntry?.playerName || 'Player',
+      jerseyNumber: player?.jerseyNumber ?? statEntry?.jerseyNumber,
       period: match.currentPeriod || '',
       gameTime: formatTime(match.getCurrentRemainingTime()),
       metadata: {
         statType,
         delta,
-        newValue: statEntry[statType],
-        description: `${player.name} #${player.jerseyNumber} ${statType.slice(0, -1).toUpperCase()} (+${delta})`,
+        newValue: statEntry ? statEntry[statType] : delta,
+        description: `${player?.name || statEntry?.playerName || 'Player'} ${statType.slice(0, -1).toUpperCase()} (+${delta})`,
       },
     });
 
     await match.save();
-    await broadcastState(req, match, event);
+    
+    const responseData = await getFullMatchData(match._id);
+    const io = req.app.get('io');
+    if (io && responseData) {
+      broadcastMatchState(io, match._id.toString(), responseData, event);
+    }
 
-    res.status(200).json({ success: true, data: match, event });
+    res.status(200).json({ success: true, data: responseData || match, event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

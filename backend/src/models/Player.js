@@ -30,6 +30,14 @@ const playerSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    isCaptain: {
+      type: Boolean,
+      default: false,
+    },
+    isViceCaptain: {
+      type: Boolean,
+      default: false,
+    },
     stats: {
       games: { type: Number, default: 0 },
       points: { type: Number, default: 0 },

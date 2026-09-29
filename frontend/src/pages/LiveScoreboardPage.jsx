@@ -158,15 +158,11 @@ const LiveScoreboardPage = () => {
 
   // Scoring with Player Attribution
   const handleOpenScorerModal = (team, points) => {
-    if (points > 0) {
-      setScorerModal({
-        isOpen: true,
-        team,
-        points,
-      });
-    } else {
-      executeScoreUpdate(team, points, null);
-    }
+    setScorerModal({
+      isOpen: true,
+      team,
+      points,
+    });
   };
 
   const executeScoreUpdate = async (team, points, playerId) => {
@@ -328,7 +324,35 @@ const LiveScoreboardPage = () => {
   const teamASubs = match.teamA_roster?.substitutes || [];
   const teamBSubs = match.teamB_roster?.substitutes || [];
 
-  const activePlayersForModal = scorerModal.team === 'A' ? teamAStarters : teamBStarters;
+  // Robust determination of on-court players for the scoring modal
+  const activePlayersForModal = React.useMemo(() => {
+    if (!match) return [];
+    const team = scorerModal.team;
+
+    // 1. Check playerStats for active players on court
+    const teamStats = (match.playerStats || []).filter((s) => s.team === team);
+    const onCourtStats = teamStats.filter((s) => s.isActive !== false);
+    if (onCourtStats.length > 0) {
+      return onCourtStats.map((s) => ({
+        playerId: s.playerId,
+        player: s.playerId,
+        playerName: s.playerName,
+        name: s.playerName,
+        jerseyNumber: s.jerseyNumber,
+        isStarter: s.isStarter,
+        isActive: s.isActive,
+        isCaptain: s.isCaptain,
+        isViceCaptain: s.isViceCaptain,
+      }));
+    }
+
+    // 2. Fallback to roster starters
+    const starters = team === 'A' ? teamAStarters : teamBStarters;
+    if (starters && starters.length > 0) return starters;
+
+    // 3. Fallback to all team players
+    return team === 'A' ? (match.playersA || []) : (match.playersB || []);
+  }, [match, scorerModal.team, teamAStarters, teamBStarters]);
 
   return (
     <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5">
@@ -658,6 +682,7 @@ const LiveScoreboardPage = () => {
         match={match}
         isScorer={isScorer && !isCompleted}
         onRecordStat={handleRecordPlayerStat}
+        onPlayerScore={(team, pts, pId) => executeScoreUpdate(team, pts, pId)}
       />
 
       {/* Scorer Player Attribution Modal (Active court players only) */}

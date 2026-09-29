@@ -145,7 +145,22 @@ const CreateMatchPage = () => {
     const nStarters = type === '3x3' ? 3 : 5;
     const nSubs = type === '3x3' ? 1 : 5;
 
-    const allPlayerIds = teamDoc.players.map((p) => p._id || p);
+    // Prioritize Captain then Vice-Captain for starting roster
+    const sortedPlayers = [...teamDoc.players].sort((a, b) => {
+      const aIsCap = a.isCaptain || a.name?.includes('(C)');
+      const bIsCap = b.isCaptain || b.name?.includes('(C)');
+      if (aIsCap && !bIsCap) return -1;
+      if (!aIsCap && bIsCap) return 1;
+
+      const aIsVc = a.isViceCaptain || a.name?.includes('(VC)');
+      const bIsVc = b.isViceCaptain || b.name?.includes('(VC)');
+      if (aIsVc && !bIsVc) return -1;
+      if (!aIsVc && bIsVc) return 1;
+
+      return 0;
+    });
+
+    const allPlayerIds = sortedPlayers.map((p) => p._id || p);
     const starters = allPlayerIds.slice(0, nStarters);
     const subs = allPlayerIds.slice(nStarters, nStarters + nSubs);
 
@@ -359,11 +374,21 @@ const CreateMatchPage = () => {
                       : 'bg-slate-900/50 border-slate-800/80 text-slate-300'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="w-6 h-6 rounded bg-slate-900 font-digital font-bold text-amber-400 flex items-center justify-center text-[11px]">
                       #{player.jerseyNumber ?? '?'}
                     </span>
                     <span className="font-semibold text-white">{player.name}</span>
+                    {(player.isCaptain || player.name?.includes('(C)') || (teamDoc?.captain && player.name?.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase() === teamDoc.captain.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase())) && (
+                      <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] font-mono font-black">
+                        👑 (C)
+                      </span>
+                    )}
+                    {(player.isViceCaptain || player.name?.includes('(VC)') || (teamDoc?.viceCaptain && player.name?.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase() === teamDoc.viceCaptain.replace(/\s*\([CV]+\)/gi, '').trim().toLowerCase())) && (
+                      <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 text-[9px] font-mono font-black">
+                        🥈 (VC)
+                      </span>
+                    )}
                     <span className="text-[10px] text-slate-500 font-mono">({player.position || 'G'})</span>
                   </div>
 
