@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /matches/*/setup
+Disallow: /matches/create
+
+Sitemap: https://mits-basketball-club.vercel.app/sitemap.xml

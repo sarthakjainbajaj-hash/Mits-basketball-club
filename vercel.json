@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/robots.txt"
+    },
+    {
       "source": "/googlef3e625486e7151f4.html",
       "destination": "/googlef3e625486e7151f4.html"
     },
