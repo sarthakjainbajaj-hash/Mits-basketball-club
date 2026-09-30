@@ -58,6 +58,7 @@ const CreateMatchPage = () => {
   const requiredStarters = matchType === '3x3' ? 3 : 5;
   const minSubs = matchType === '3x3' ? 1 : 5;
   const maxSubs = matchType === '3x3' ? 2 : 5;
+  const requiredSubs = matchType === '3x3' ? '1 to 2' : '5';
 
   useEffect(() => {
     fetchOptions();
@@ -682,7 +683,7 @@ const CreateMatchPage = () => {
                   <Users className="w-4 h-4" /> Official Match Rosters ({matchType})
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Select exactly {requiredStarters} on-court starters and {requiredSubs} bench substitute(s) for each team.
+                  Select {requiredStarters} on-court starters and {requiredSubs} bench substitute(s) for each team.
                 </p>
               </div>
             </div>
