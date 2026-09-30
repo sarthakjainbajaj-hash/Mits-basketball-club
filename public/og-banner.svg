@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ea580c" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Basketball Court Subtle Lines -->
+  <circle cx="600" cy="315" r="220" stroke="#334155" stroke-width="2" fill="none" opacity="0.4"/>
+  <line x1="600" y1="0" x2="600" y2="630" stroke="#334155" stroke-width="2" opacity="0.4"/>
+  <rect x="30" y="30" width="1140" height="570" rx="20" stroke="url(#glow)" stroke-width="3" fill="none"/>
+
+  <!-- Basketball Icon / Flame Badge -->
+  <g transform="translate(100, 140)">
+    <rect width="110" height="110" rx="28" fill="url(#flame)"/>
+    <circle cx="55" cy="55" r="32" stroke="#ffffff" stroke-width="4" fill="none"/>
+    <path d="M55 23a48 48 0 0 1 12 32 48 48 0 0 1-12 32 48 48 0 0 1-12-32 48 48 0 0 1 12-32z" stroke="#ffffff" stroke-width="3.5" fill="none"/>
+    <line x1="23" y1="55" x2="87" y2="55" stroke="#ffffff" stroke-width="3.5"/>
+  </g>
+
+  <!-- Brand Typography -->
+  <text x="240" y="195" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="48" fill="#ffffff" letter-spacing="2">
+    MITS BASKETBALL CLUB
+  </text>
+  <text x="240" y="240" font-family="'Courier New', monospace" font-weight="700" font-size="24" fill="#f97316" letter-spacing="4">
+    HOOPSCORE LIVE ENGINE • 3X3 &amp; 5X5
+  </text>
+
+  <!-- Main Headline -->
+  <text x="100" y="360" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="44" fill="#f8fafc">
+    Official Live Scoreboard &amp; Tournament Platform
+  </text>
+  <text x="100" y="415" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="24" fill="#94a3b8">
+    FIBA 3x3 &amp; 5x5 Standards • 12s/24s Shot Clock • Team Statistics • Match Archives
+  </text>
+
+  <!-- Badges / Feature Tags -->
+  <g transform="translate(100, 480)">
+    <!-- Badge 1 -->
+    <rect x="0" y="0" width="220" height="46" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+    <text x="110" y="29" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700" fill="#38bdf8" text-anchor="middle">⚡ Real-Time Sync</text>
+
+    <!-- Badge 2 -->
+    <rect x="240" y="0" width="220" height="46" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+    <text x="350" y="29" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700" fill="#fb923c" text-anchor="middle">🏀 FIBA 3x3 &amp; 5x5</text>
+
+    <!-- Badge 3 -->
+    <rect x="480" y="0" width="220" height="46" rx="12" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+    <text x="590" y="29" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="700" fill="#4ade80" text-anchor="middle">⏱️ 12s / 24s Shot Clock</text>
+
+    <!-- Creator Tag -->
+    <text x="1000" y="30" font-family="'Courier New', monospace" font-size="16" font-weight="600" fill="#64748b" text-anchor="end">Made by Sarthak Jain Bajaj</text>
+  </g>
+</svg>
