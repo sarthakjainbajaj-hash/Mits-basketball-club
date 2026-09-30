@@ -35,6 +35,14 @@ const Footer = () => {
             </Link>
           </div>
         </div>
+
+        {/* Bottom Attribution */}
+        <div className="mt-6 pt-4 border-t border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-mono text-slate-400">
+          <p>© {new Date().getFullYear()} HoopScore 3x3. All rights reserved.</p>
+          <p className="text-slate-300 font-medium">
+            Made by <span className="text-orange-400 font-bold tracking-wide">Sarthak Jain Bajaj</span>
+          </p>
+        </div>
       </div>
     </footer>
   );

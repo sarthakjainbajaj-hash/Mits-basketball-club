@@ -239,24 +239,34 @@ const MatchHistoryPage = () => {
 
                   {/* Scoreboard display */}
                   <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 my-2">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0 pr-2">
                       <span className="font-bold text-white text-sm block truncate">
-                        {m.teamA?.shortName || m.teamA?.name}
+                        {m.teamA?.name || m.teamA?.shortName}
                       </span>
-                      <span className="text-[10px] text-slate-500 font-mono">
+                      {m.teamA?.shortName && m.teamA?.name && m.teamA.shortName !== m.teamA.name && (
+                        <span className="text-[11px] text-slate-400 font-mono block truncate">
+                          ({m.teamA.shortName})
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
                         Fouls: {m.foulsA || 0}
                       </span>
                     </div>
 
-                    <div className="px-3.5 py-1 rounded-xl bg-slate-900 font-digital font-black text-xl text-amber-400 border border-slate-700 mx-2 tracking-[0.16em]">
+                    <div className="px-3.5 py-1 rounded-xl bg-slate-900 font-digital font-black text-xl text-amber-400 border border-slate-700 mx-2 tracking-[0.16em] flex-shrink-0">
                       {m.scoreA} - {m.scoreB}
                     </div>
 
-                    <div className="flex-1 text-right">
+                    <div className="flex-1 min-w-0 text-right pl-2">
                       <span className="font-bold text-white text-sm block truncate">
-                        {m.teamB?.shortName || m.teamB?.name}
+                        {m.teamB?.name || m.teamB?.shortName}
                       </span>
-                      <span className="text-[10px] text-slate-500 font-mono">
+                      {m.teamB?.shortName && m.teamB?.name && m.teamB.shortName !== m.teamB.name && (
+                        <span className="text-[11px] text-slate-400 font-mono block truncate">
+                          ({m.teamB.shortName})
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
                         Fouls: {m.foulsB || 0}
                       </span>
                     </div>

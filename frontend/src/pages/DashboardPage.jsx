@@ -246,15 +246,29 @@ const DashboardPage = () => {
                     <span>{m.tournamentId?.name || 'Exhibition 3x3'}</span>
                     <span>{new Date(m.scheduledDate).toLocaleDateString()}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 font-bold text-white group-hover:text-orange-400 transition-colors">
-                      {m.teamA?.shortName || m.teamA?.name}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <span className="font-bold text-white text-sm sm:text-base block truncate group-hover:text-orange-400 transition-colors">
+                        {m.teamA?.name || m.teamA?.shortName}
+                      </span>
+                      {m.teamA?.shortName && m.teamA?.name && m.teamA.shortName !== m.teamA.name && (
+                        <span className="text-[11px] text-slate-400 font-mono block truncate">
+                          ({m.teamA.shortName})
+                        </span>
+                      )}
                     </div>
-                    <div className="px-3 py-1 rounded-lg bg-slate-900 font-digital font-bold text-base text-amber-400 border border-slate-700 tracking-[0.16em]">
+                    <div className="px-3 py-1 rounded-lg bg-slate-900 font-digital font-bold text-base text-amber-400 border border-slate-700 tracking-[0.16em] flex-shrink-0">
                       {m.scoreA} - {m.scoreB}
                     </div>
-                    <div className="flex-1 text-right font-bold text-white group-hover:text-cyan-400 transition-colors">
-                      {m.teamB?.shortName || m.teamB?.name}
+                    <div className="flex-1 min-w-0 text-right">
+                      <span className="font-bold text-white text-sm sm:text-base block truncate group-hover:text-cyan-400 transition-colors">
+                        {m.teamB?.name || m.teamB?.shortName}
+                      </span>
+                      {m.teamB?.shortName && m.teamB?.name && m.teamB.shortName !== m.teamB.name && (
+                        <span className="text-[11px] text-slate-400 font-mono block truncate">
+                          ({m.teamB.shortName})
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="text-[11px] text-emerald-400 mt-1.5 font-mono flex items-center justify-center gap-1">

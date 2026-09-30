@@ -37,11 +37,6 @@ const LoginPage = () => {
     }
   };
 
-  const handleQuickLogin = (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-  };
-
   return (
     <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 relative overflow-hidden">
       {/* Background ambient lighting */}
@@ -72,7 +67,7 @@ const LoginPage = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@hoopscore.com"
+                  placeholder="your.email@example.com"
                   className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-white text-sm outline-none transition-all"
                   required
                 />
@@ -110,36 +105,6 @@ const LoginPage = () => {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Fill Buttons */}
-          <div className="mt-6 pt-6 border-t border-slate-800">
-            <p className="text-[11px] font-mono uppercase text-slate-400 font-bold mb-2.5 text-center">
-              Quick Demo Access
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin@hoopscore.com', 'admin123')}
-                className="py-1.5 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-mono font-bold transition-all text-center"
-              >
-                Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('scorer@hoopscore.com', 'scorer123')}
-                className="py-1.5 px-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-mono font-bold transition-all text-center"
-              >
-                Scorer
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('viewer@hoopscore.com', 'viewer123')}
-                className="py-1.5 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold transition-all text-center"
-              >
-                Viewer
-              </button>
-            </div>
-          </div>
 
           {/* Register Link */}
           <div className="mt-6 text-center text-xs text-slate-400">
