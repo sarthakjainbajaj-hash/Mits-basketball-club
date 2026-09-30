@@ -79,6 +79,32 @@ const LiveScoreboardPage = () => {
     }
   };
 
+  // Defensive state merger ensuring populated team/roster data is never clobbered
+  const mergeMatchState = (prev, incoming, extra = {}) => {
+    if (!prev) return incoming ? { ...incoming, ...extra } : null;
+    if (!incoming) return { ...prev, ...extra };
+    return {
+      ...prev,
+      ...incoming,
+      teamA: (incoming.teamA && typeof incoming.teamA === 'object' && incoming.teamA.name)
+        ? incoming.teamA
+        : prev.teamA,
+      teamB: (incoming.teamB && typeof incoming.teamB === 'object' && incoming.teamB.name)
+        ? incoming.teamB
+        : prev.teamB,
+      tournamentId: (incoming.tournamentId && typeof incoming.tournamentId === 'object' && incoming.tournamentId.name)
+        ? incoming.tournamentId
+        : prev.tournamentId,
+      teamA_roster: (incoming.teamA_roster?.starters?.[0]?.player?.name)
+        ? incoming.teamA_roster
+        : prev.teamA_roster,
+      teamB_roster: (incoming.teamB_roster?.starters?.[0]?.player?.name)
+        ? incoming.teamB_roster
+        : prev.teamB_roster,
+      ...extra,
+    };
+  };
+
   // Socket.IO Room Connection and Event Listeners
   useEffect(() => {
     if (!id) return;
@@ -89,15 +115,13 @@ const LiveScoreboardPage = () => {
         setMatch((prev) => {
           if (!prev) return { ...updatedMatch, serverTime: updatedMatch.serverTime || timestamp };
           const isTimerActive = prev.timerRunning && updatedMatch.timerRunning;
-          return {
-            ...prev,
-            ...updatedMatch,
+          return mergeMatchState(prev, updatedMatch, {
             timerRunning: updatedMatch.timerRunning,
             timerStartedAt: isTimerActive ? prev.timerStartedAt : updatedMatch.timerStartedAt,
             serverTime: isTimerActive ? prev.serverTime : (updatedMatch.serverTime || timestamp),
             shotClockRunning: updatedMatch.shotClockRunning,
             shotClockStartedAt: isTimerActive ? prev.shotClockStartedAt : updatedMatch.shotClockStartedAt,
-          };
+          });
         });
       });
 
@@ -185,15 +209,13 @@ const LiveScoreboardPage = () => {
         setMatch((prev) => {
           if (!prev) return res.data;
           const keepTimer = prev.timerRunning && prev.timerStartedAt;
-          return {
-            ...prev,
-            ...res.data,
+          return mergeMatchState(prev, res.data, {
             timerRunning: true,
             timerStartedAt: keepTimer ? prev.timerStartedAt : res.data.timerStartedAt,
             serverTime: keepTimer ? prev.serverTime : res.data.serverTime,
             shotClockRunning: true,
             shotClockStartedAt: keepTimer ? prev.shotClockStartedAt : res.data.shotClockStartedAt,
-          };
+          });
         });
       }
     } catch (err) {
@@ -237,9 +259,7 @@ const LiveScoreboardPage = () => {
     try {
       const res = await matchApi.pause(id);
       if (res?.data) {
-        setMatch((prev) => ({
-          ...prev,
-          ...res.data,
+        setMatch((prev) => mergeMatchState(prev, res.data, {
           timerRunning: false,
           timerStartedAt: null,
           shotClockRunning: false,
@@ -274,7 +294,7 @@ const LiveScoreboardPage = () => {
 
     try {
       const res = await matchApi.resetTimer(id, defaultSecs);
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
       fetchMatch();
@@ -334,7 +354,7 @@ const LiveScoreboardPage = () => {
 
     try {
       const res = await matchApi.controlShotClock(id, { action, seconds });
-      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
       fetchMatch();
@@ -401,7 +421,7 @@ const LiveScoreboardPage = () => {
 
     try {
       const res = await matchApi.updateScore(id, { team, points, playerId });
-      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
 
       if (res?.autoCompleted) {
         playGameEndHorn();
@@ -436,7 +456,7 @@ const LiveScoreboardPage = () => {
 
     try {
       const res = await matchApi.recordFoul(id, { team, change });
-      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
     } catch (err) {
       setToast({ message: err.message || 'Failed to update foul', type: 'error' });
       fetchMatch();
@@ -458,7 +478,7 @@ const LiveScoreboardPage = () => {
 
     try {
       const res = await matchApi.togglePossession(id);
-      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
       fetchMatch();
@@ -485,7 +505,7 @@ const LiveScoreboardPage = () => {
 
     try {
       const res = await matchApi.callTimeout(id, team);
-      if (res?.data) setMatch((prev) => ({ ...prev, ...res.data }));
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
     } catch (err) {
       setToast({ message: err.message || 'Failed to call timeout', type: 'error' });
       fetchMatch();
@@ -497,7 +517,7 @@ const LiveScoreboardPage = () => {
     try {
       playClick();
       const res = await matchApi.substitute(id, { team, playerOutId, playerInId });
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
       setToast({ message: 'Substitution completed successfully!', type: 'success' });
     } catch (err) {
       setToast({ message: err.message || 'Failed to substitute player', type: 'error' });
@@ -510,7 +530,7 @@ const LiveScoreboardPage = () => {
     try {
       playGameEndHorn();
       const res = await matchApi.controlPeriod(id, { action: 'END_QUARTER' });
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
       setToast({ message: `${match.currentPeriod || 'Quarter'} officially ended`, type: 'info' });
     } catch (err) {
       setToast({ message: err.message || 'Failed to end quarter', type: 'error' });
@@ -521,7 +541,7 @@ const LiveScoreboardPage = () => {
     try {
       playClick();
       const res = await matchApi.controlPeriod(id, { action: 'NEXT_QUARTER' });
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
       setToast({ message: `Advanced to ${res.data?.currentPeriod}! Timer & fouls reset.`, type: 'success' });
     } catch (err) {
       setToast({ message: err.message || 'Failed to advance quarter', type: 'error' });
@@ -554,7 +574,7 @@ const LiveScoreboardPage = () => {
 
       setToast({ message: `Recorded ${statType.slice(0, -1).toUpperCase()} (+${change}) (0ms)`, type: 'info' });
       const res = await matchApi.recordPlayerStat(id, { playerId, statType, change });
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
       fetchMatch();
@@ -566,7 +586,7 @@ const LiveScoreboardPage = () => {
     try {
       playClick();
       const res = await matchApi.undo(id);
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
       setToast({ message: res.message || 'Action undone', type: 'info' });
     } catch (err) {
       setToast({ message: err.message || 'Nothing to undo', type: 'warning' });
@@ -709,7 +729,7 @@ const LiveScoreboardPage = () => {
     try {
       playGameEndHorn();
       const res = await matchApi.end(id);
-      if (res?.data) setMatch(res.data);
+      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
       setToast({ message: 'Match officially ended and persisted to database!', type: 'success' });
     } catch (err) {
       setToast({ message: err.message || 'Failed to end match', type: 'error' });
@@ -935,7 +955,7 @@ const LiveScoreboardPage = () => {
         {isCompleted && (
           <div className="mb-6 p-4 rounded-2xl bg-emerald-950/80 border border-emerald-500/50 text-center animate-in fade-in">
             <h2 className="text-xl sm:text-2xl font-black text-emerald-400 font-digital tracking-wide">
-              MATCH COMPLETED — FINAL SCORE: {match.scoreA} - {match.scoreB}
+              MATCH COMPLETED — FINAL SCORE: <span className="tracking-[0.16em] inline-block">{match.scoreA}</span> - <span className="tracking-[0.16em] inline-block">{match.scoreB}</span>
             </h2>
             <p className="text-xs text-slate-300 font-mono mt-1">
               Winner:{' '}
@@ -958,7 +978,7 @@ const LiveScoreboardPage = () => {
             {match.periodScores.map((ps) => (
               <div key={ps.period} className="flex items-center gap-2">
                 <span className="text-cyan-400 font-bold">{ps.period}:</span>
-                <span className="text-white font-digital font-bold text-sm">
+                <span className="text-white font-digital font-bold text-sm tracking-[0.14em]">
                   {ps.scoreA} - {ps.scoreB}
                 </span>
               </div>

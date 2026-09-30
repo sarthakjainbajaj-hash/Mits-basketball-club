@@ -248,7 +248,7 @@ const MatchHistoryPage = () => {
                       </span>
                     </div>
 
-                    <div className="px-3.5 py-1 rounded-xl bg-slate-900 font-digital font-black text-xl text-amber-400 border border-slate-700 mx-2">
+                    <div className="px-3.5 py-1 rounded-xl bg-slate-900 font-digital font-black text-xl text-amber-400 border border-slate-700 mx-2 tracking-[0.16em]">
                       {m.scoreA} - {m.scoreB}
                     </div>
 

@@ -136,7 +136,7 @@ const MatchDetailsPage = () => {
               {match.teamA?.name}
             </h3>
             <p className="text-xs text-slate-400 font-mono mt-0.5">Fouls: {match.foulsA || 0}</p>
-            <div className="font-digital text-5xl sm:text-7xl font-black text-amber-400 led-amber mt-2">
+            <div className="font-digital text-5xl sm:text-7xl font-black text-amber-400 led-amber mt-2 tracking-[0.18em] pl-2 inline-block">
               {match.scoreA}
             </div>
           </div>
@@ -148,12 +148,12 @@ const MatchDetailsPage = () => {
             </span>
             <div className="w-8 h-0.5 bg-slate-700 mx-auto" />
             {isCompleted && (
-              <span className="text-[11px] font-mono text-emerald-400 font-bold mt-2 block">
+              <span className="text-xs font-mono text-emerald-400 font-bold mt-2 block">
                 WINNER:{' '}
                 {match.winner === 'A'
-                  ? match.teamA?.shortName
+                  ? match.teamA?.name || match.teamA?.shortName
                   : match.winner === 'B'
-                  ? match.teamB?.shortName
+                  ? match.teamB?.name || match.teamB?.shortName
                   : 'DRAW'}
               </span>
             )}
@@ -165,7 +165,7 @@ const MatchDetailsPage = () => {
               {match.teamB?.name}
             </h3>
             <p className="text-xs text-slate-400 font-mono mt-0.5">Fouls: {match.foulsB || 0}</p>
-            <div className="font-digital text-5xl sm:text-7xl font-black text-cyan-400 led-cyan mt-2">
+            <div className="font-digital text-5xl sm:text-7xl font-black text-cyan-400 led-cyan mt-2 tracking-[0.18em] pl-2 inline-block">
               {match.scoreB}
             </div>
           </div>
@@ -181,7 +181,7 @@ const MatchDetailsPage = () => {
               {match.periodScores.map((ps) => (
                 <div key={ps.period} className="p-2 rounded-xl bg-slate-950/60 border border-slate-800">
                   <span className="text-cyan-400 font-bold block">{ps.period}</span>
-                  <span className="text-white font-digital font-bold text-sm">
+                  <span className="text-white font-digital font-bold text-sm tracking-[0.14em]">
                     {ps.scoreA} - {ps.scoreB}
                   </span>
                 </div>
@@ -246,7 +246,7 @@ const MatchDetailsPage = () => {
                         {p.isStarter ? 'Starter' : 'Sub'}
                       </span>
                     </td>
-                    <td className="py-2.5 px-2 text-center font-bold text-orange-400 font-digital text-base">
+                    <td className="py-2.5 px-2 text-center font-bold text-orange-400 font-digital text-base tracking-[0.12em]">
                       {p.points}
                     </td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.onePoints}</td>
@@ -315,7 +315,7 @@ const MatchDetailsPage = () => {
                         {p.isStarter ? 'Starter' : 'Sub'}
                       </span>
                     </td>
-                    <td className="py-2.5 px-2 text-center font-bold text-orange-400 font-digital text-base">
+                    <td className="py-2.5 px-2 text-center font-bold text-orange-400 font-digital text-base tracking-[0.12em]">
                       {p.points}
                     </td>
                     <td className="py-2.5 px-2 text-center text-slate-300">{p.onePoints}</td>
@@ -354,7 +354,7 @@ const MatchDetailsPage = () => {
                 className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs font-mono"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-slate-500 font-digital text-xs min-w-[45px]">
+                  <span className="text-slate-500 font-digital text-xs min-w-[45px] tracking-[0.08em]">
                     {ev.gameTime || '00:00'}
                   </span>
                   <span
@@ -378,7 +378,7 @@ const MatchDetailsPage = () => {
                 </div>
 
                 {ev.points ? (
-                  <span className="font-digital font-bold text-amber-400 text-sm">
+                  <span className="font-digital font-bold text-amber-400 text-sm tracking-[0.12em]">
                     {ev.points > 0 ? `+${ev.points}` : ev.points} PTS
                   </span>
                 ) : null}

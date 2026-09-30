@@ -79,7 +79,7 @@ const TeamScoreCard = ({
       {/* Giant Scoreboard LED Score */}
       <div className="my-2 sm:my-4 flex items-center justify-center">
         <span
-          className={`font-digital font-black select-none tracking-tight leading-none ${
+          className={`font-digital font-black select-none tracking-[0.16em] pl-2 leading-none inline-block ${
             large ? 'text-8xl sm:text-9xl md:text-[140px]' : 'text-7xl sm:text-8xl md:text-9xl'
           } ${
             team === 'A' ? 'text-amber-400 led-amber' : 'text-cyan-400 led-cyan'

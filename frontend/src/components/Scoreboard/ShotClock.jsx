@@ -91,7 +91,7 @@ const ShotClock = ({
 
       {/* Main Digital Display */}
       <div
-        className={`font-digital font-black tracking-tighter select-none transition-all leading-none ${
+        className={`font-digital font-black tracking-[0.14em] pl-1 inline-block select-none transition-all leading-none ${
           large ? 'text-6xl sm:text-8xl' : 'text-5xl sm:text-7xl'
         } ${
           isExpired

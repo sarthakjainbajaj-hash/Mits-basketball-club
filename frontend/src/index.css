@@ -14,11 +14,20 @@
 .font-digital {
   font-family: 'Orbitron', monospace;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+}
+
+.score-digits {
+  font-family: 'Orbitron', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.18em;
+  display: inline-block;
 }
 
 .font-mono-sport {
   font-family: 'Share Tech Mono', monospace;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
 }
 
 .led-amber {

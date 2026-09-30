@@ -31,15 +31,14 @@ const getFullMatchData = async (matchId) => {
   return responseData;
 };
 
-// Helper to broadcast match update with populated fields
+// Helper to broadcast match update with populated fields and return populated data
 const broadcastState = async (req, match, latestEvent = null) => {
-  const io = req.app.get('io');
-  if (!io) return;
-
   const responseData = await getFullMatchData(match._id);
-  if (!responseData) return;
-
-  broadcastMatchState(io, match._id.toString(), responseData, latestEvent);
+  const io = req.app.get('io');
+  if (io && responseData) {
+    broadcastMatchState(io, match._id.toString(), responseData, latestEvent);
+  }
+  return responseData;
 };
 
 // @desc    Start / Resume live match timer
@@ -75,8 +74,8 @@ const startMatch = async (req, res) => {
       metadata: { description: 'Game timer and shot clock started' },
     });
 
-    await broadcastState(req, match, event);
-    res.status(200).json({ success: true, data: match, event });
+    const responseData = await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: responseData || match, event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -118,8 +117,8 @@ const pauseMatch = async (req, res) => {
       metadata: { description: 'Game timer paused' },
     });
 
-    await broadcastState(req, match, event);
-    res.status(200).json({ success: true, data: match, event });
+    const responseData = await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: responseData || match, event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -140,8 +139,8 @@ const resetTimer = async (req, res) => {
     match.timerStartedAt = null;
 
     await match.save();
-    await broadcastState(req, match);
-    res.status(200).json({ success: true, data: match });
+    const responseData = await broadcastState(req, match);
+    res.status(200).json({ success: true, data: responseData || match });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -194,8 +193,8 @@ const controlShotClock = async (req, res) => {
       broadcastBuzzerAlert(io, match._id.toString(), 'SHOT_CLOCK', { message: 'Shot Clock Expired' });
     }
 
-    await broadcastState(req, match);
-    res.status(200).json({ success: true, data: match });
+    const responseData = await broadcastState(req, match);
+    res.status(200).json({ success: true, data: responseData || match });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -452,9 +451,9 @@ const recordFoul = async (req, res) => {
     });
 
     await match.save();
-    await broadcastState(req, match, event);
+    const responseData = await broadcastState(req, match, event);
 
-    res.status(200).json({ success: true, data: match, event });
+    res.status(200).json({ success: true, data: responseData || match, event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -493,8 +492,8 @@ const togglePossession = async (req, res) => {
       },
     });
 
-    await broadcastState(req, match, event);
-    res.status(200).json({ success: true, data: match, event });
+    const responseData = await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: responseData || match, event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -556,8 +555,8 @@ const callTimeout = async (req, res) => {
     const io = req.app.get('io');
     broadcastBuzzerAlert(io, match._id.toString(), 'WHISTLE', { message: `Timeout Team ${team}` });
 
-    await broadcastState(req, match, event);
-    res.status(200).json({ success: true, data: match, event });
+    const responseData = await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: responseData || match, event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -768,9 +767,9 @@ const substitutePlayer = async (req, res) => {
     });
 
     await match.save();
-    await broadcastState(req, match, event);
+    const responseData = await broadcastState(req, match, event);
 
-    res.status(200).json({ success: true, data: match, event });
+    res.status(200).json({ success: true, data: responseData || match, event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -841,8 +840,8 @@ const controlPeriod = async (req, res) => {
       });
 
       await match.save();
-      await broadcastState(req, match, event);
-      return res.status(200).json({ success: true, data: match, event });
+      const responseData = await broadcastState(req, match, event);
+      return res.status(200).json({ success: true, data: responseData || match, event });
     } else if (action === 'NEXT_QUARTER') {
       const current = match.currentPeriod || 'Q1';
       let nextPeriod = 'Q2';
@@ -887,13 +886,13 @@ const controlPeriod = async (req, res) => {
       });
 
       await match.save();
-      await broadcastState(req, match, event);
-      return res.status(200).json({ success: true, data: match, event });
+      const responseData = await broadcastState(req, match, event);
+      return res.status(200).json({ success: true, data: responseData || match, event });
     } else if (action === 'SET_PERIOD' && period) {
       match.currentPeriod = period;
       await match.save();
-      await broadcastState(req, match);
-      return res.status(200).json({ success: true, data: match });
+      const responseData = await broadcastState(req, match);
+      return res.status(200).json({ success: true, data: responseData || match });
     } else {
       return res.status(400).json({ success: false, message: 'Invalid period action' });
     }
@@ -1050,11 +1049,11 @@ const undoLastAction = async (req, res) => {
     await lastEvent.deleteOne();
     await match.save();
 
-    await broadcastState(req, match);
+    const responseData = await broadcastState(req, match);
     res.status(200).json({
       success: true,
       message: `Undid last action: ${lastEvent.type}`,
-      data: match,
+      data: responseData || match,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1175,8 +1174,8 @@ const endMatch = async (req, res) => {
       finalScore: match.finalScore,
     });
 
-    await broadcastState(req, match, event);
-    res.status(200).json({ success: true, data: match, event });
+    const responseData = await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: responseData || match, event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

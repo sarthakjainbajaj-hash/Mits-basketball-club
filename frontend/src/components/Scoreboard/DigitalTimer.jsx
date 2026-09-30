@@ -84,11 +84,11 @@ const DigitalTimer = ({
             : 'text-amber-400 led-amber'
         }`}
       >
-        <span>{formattedMins}</span>
-        <span className={timerRunning ? 'animate-pulse' : ''}>:</span>
-        <span>{formattedSecs}</span>
+        <span className="tracking-[0.16em] inline-block">{formattedMins}</span>
+        <span className={`px-1 inline-block ${timerRunning ? 'animate-pulse' : ''}`}>:</span>
+        <span className="tracking-[0.16em] inline-block">{formattedSecs}</span>
         {isCritical && (
-          <span className="text-3xl sm:text-5xl md:text-6xl text-red-400 opacity-90">
+          <span className="text-3xl sm:text-5xl md:text-6xl text-red-400 opacity-90 tracking-[0.12em] pl-1">
             .{tenths}
           </span>
         )}

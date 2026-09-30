@@ -187,7 +187,7 @@ const DashboardPage = () => {
                 <h3 className="text-xl font-bold text-white">{featuredLiveMatch.teamA?.name}</h3>
                 <p className="text-xs text-slate-400 font-mono">Fouls: {featuredLiveMatch.foulsA || 0}</p>
               </div>
-              <span className="font-digital text-5xl font-black text-amber-400 led-amber">
+              <span className="font-digital text-5xl font-black text-amber-400 led-amber tracking-[0.16em] pl-2 inline-block">
                 {featuredLiveMatch.scoreA}
               </span>
             </div>
@@ -205,7 +205,7 @@ const DashboardPage = () => {
 
             {/* Team B */}
             <div className="flex items-center justify-center md:justify-start gap-4 text-left">
-              <span className="font-digital text-5xl font-black text-cyan-400 led-cyan">
+              <span className="font-digital text-5xl font-black text-cyan-400 led-cyan tracking-[0.16em] pl-2 inline-block">
                 {featuredLiveMatch.scoreB}
               </span>
               <div>
@@ -250,7 +250,7 @@ const DashboardPage = () => {
                     <div className="flex-1 font-bold text-white group-hover:text-orange-400 transition-colors">
                       {m.teamA?.shortName || m.teamA?.name}
                     </div>
-                    <div className="px-3 py-1 rounded-lg bg-slate-900 font-digital font-bold text-base text-amber-400 border border-slate-700">
+                    <div className="px-3 py-1 rounded-lg bg-slate-900 font-digital font-bold text-base text-amber-400 border border-slate-700 tracking-[0.16em]">
                       {m.scoreA} - {m.scoreB}
                     </div>
                     <div className="flex-1 text-right font-bold text-white group-hover:text-cyan-400 transition-colors">

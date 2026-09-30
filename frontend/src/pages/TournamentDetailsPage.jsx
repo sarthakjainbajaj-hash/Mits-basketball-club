@@ -264,7 +264,7 @@ const TournamentDetailsPage = () => {
 
                     <div className="flex items-center justify-between py-2 border-y border-slate-800 my-2">
                       <span className="font-bold text-white text-sm">{m.teamA?.name}</span>
-                      <span className="font-digital font-bold text-amber-400 text-lg px-3 py-0.5 rounded bg-slate-950 border border-slate-800">
+                      <span className="font-digital font-bold text-amber-400 text-lg px-3 py-0.5 rounded bg-slate-950 border border-slate-800 tracking-[0.16em]">
                         {m.scoreA} - {m.scoreB}
                       </span>
                       <span className="font-bold text-white text-sm">{m.teamB?.name}</span>

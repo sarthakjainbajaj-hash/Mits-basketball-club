@@ -19,7 +19,7 @@ const FoulTracker = ({
           FOULS:
         </span>
         <span
-          className={`font-digital text-2xl font-black ${
+          className={`font-digital text-2xl font-black tracking-[0.14em] pl-1 inline-block ${
             isDoublePenalty
               ? 'text-red-500 led-red animate-pulse'
               : isPenalty

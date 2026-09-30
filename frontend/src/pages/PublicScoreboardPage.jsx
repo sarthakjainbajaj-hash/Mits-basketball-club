@@ -43,10 +43,17 @@ const PublicScoreboardPage = () => {
 
     if (socket) {
       socket.on('match-updated', ({ match: updatedMatch, timestamp }) => {
-        setMatch({
+        setMatch((prev) => ({
+          ...prev,
           ...updatedMatch,
+          teamA: (updatedMatch.teamA && typeof updatedMatch.teamA === 'object' && updatedMatch.teamA.name)
+            ? updatedMatch.teamA
+            : prev?.teamA,
+          teamB: (updatedMatch.teamB && typeof updatedMatch.teamB === 'object' && updatedMatch.teamB.name)
+            ? updatedMatch.teamB
+            : prev?.teamB,
           serverTime: updatedMatch.serverTime || timestamp,
-        });
+        }));
       });
 
       socket.on('buzzer-alert', ({ type }) => {
@@ -186,7 +193,7 @@ const PublicScoreboardPage = () => {
         {isCompleted && (
           <div className="max-w-3xl mx-auto mb-8 p-4 rounded-2xl bg-emerald-950/90 border border-emerald-500 text-center animate-in fade-in">
             <h2 className="text-2xl sm:text-4xl font-black text-emerald-400 font-digital tracking-wider">
-              MATCH COMPLETED — {match.scoreA} : {match.scoreB}
+              MATCH COMPLETED — <span className="tracking-[0.16em] inline-block">{match.scoreA}</span> : <span className="tracking-[0.16em] inline-block">{match.scoreB}</span>
             </h2>
             <p className="text-sm font-mono text-slate-200 mt-1">
               WINNER:{' '}
@@ -208,7 +215,7 @@ const PublicScoreboardPage = () => {
             {match.periodScores.map((ps) => (
               <div key={ps.period} className="flex items-center gap-2">
                 <span className="text-cyan-400 font-bold">{ps.period}:</span>
-                <span className="text-white font-digital font-bold text-base">
+                <span className="text-white font-digital font-bold text-base tracking-[0.14em]">
                   {ps.scoreA} - {ps.scoreB}
                 </span>
               </div>
