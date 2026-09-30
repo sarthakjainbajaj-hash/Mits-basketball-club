@@ -1,25 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const DigitalTimer = ({
   remainingTime = 600,
   timerRunning = false,
   timerStartedAt = null,
+  serverTime = null,
   onExpire = null,
   large = false,
 }) => {
   const [displaySeconds, setDisplaySeconds] = useState(remainingTime);
+  const onExpireRef = useRef(onExpire);
+  const hasExpiredRef = useRef(false);
+
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
+
+  useEffect(() => {
+    if (remainingTime > 0) {
+      hasExpiredRef.current = false;
+    }
+  }, [remainingTime, timerStartedAt]);
 
   useEffect(() => {
     let animationFrameId;
 
+    // Clock skew compensation between client device Date.now() and server's timestamp
+    const clientNowAtReceive = Date.now();
+    const clockOffset = serverTime ? clientNowAtReceive - serverTime : 0;
+
     const updateTimer = () => {
       if (timerRunning && timerStartedAt) {
-        const elapsed = (Date.now() - timerStartedAt) / 1000;
+        const adjustedNow = Date.now() - clockOffset;
+        const elapsed = (adjustedNow - timerStartedAt) / 1000;
         const currentRemaining = Math.max(0, remainingTime - elapsed);
         setDisplaySeconds(currentRemaining);
 
         if (currentRemaining <= 0) {
-          if (onExpire) onExpire();
+          if (!hasExpiredRef.current) {
+            hasExpiredRef.current = true;
+            if (onExpireRef.current) onExpireRef.current();
+          }
           return;
         }
 
@@ -36,7 +57,7 @@ const DigitalTimer = ({
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [remainingTime, timerRunning, timerStartedAt, onExpire]);
+  }, [remainingTime, timerRunning, timerStartedAt, serverTime]);
 
   const mins = Math.floor(Math.max(0, displaySeconds) / 60);
   const secs = Math.floor(Math.max(0, displaySeconds) % 60);

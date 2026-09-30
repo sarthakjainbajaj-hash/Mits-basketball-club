@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RotateCcw, Play, Pause, AlertTriangle } from 'lucide-react';
 
 const ShotClock = ({
   shotClockRemaining = 12,
   shotClockRunning = false,
   shotClockStartedAt = null,
+  serverTime = null,
   matchType = '3x3', // '3x3' or '5x5'
   onReset12 = null,
   onReset2 = null,
@@ -16,18 +17,38 @@ const ShotClock = ({
   large = false,
 }) => {
   const [displaySecs, setDisplaySecs] = useState(shotClockRemaining);
+  const onExpireRef = useRef(onExpire);
+  const hasExpiredRef = useRef(false);
+
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
+
+  useEffect(() => {
+    if (shotClockRemaining > 0) {
+      hasExpiredRef.current = false;
+    }
+  }, [shotClockRemaining, shotClockStartedAt]);
 
   useEffect(() => {
     let animationFrameId;
 
+    // Clock skew compensation between client device Date.now() and server's timestamp
+    const clientNowAtReceive = Date.now();
+    const clockOffset = serverTime ? clientNowAtReceive - serverTime : 0;
+
     const updateClock = () => {
       if (shotClockRunning && shotClockStartedAt) {
-        const elapsed = (Date.now() - shotClockStartedAt) / 1000;
+        const adjustedNow = Date.now() - clockOffset;
+        const elapsed = (adjustedNow - shotClockStartedAt) / 1000;
         const currentRemaining = Math.max(0, shotClockRemaining - elapsed);
         setDisplaySecs(currentRemaining);
 
         if (currentRemaining <= 0) {
-          if (onExpire) onExpire();
+          if (!hasExpiredRef.current) {
+            hasExpiredRef.current = true;
+            if (onExpireRef.current) onExpireRef.current();
+          }
           return;
         }
 
@@ -42,7 +63,7 @@ const ShotClock = ({
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, [shotClockRemaining, shotClockRunning, shotClockStartedAt, onExpire]);
+  }, [shotClockRemaining, shotClockRunning, shotClockStartedAt, serverTime]);
 
   const roundedSeconds = Math.max(0, Math.ceil(displaySecs));
   const isWarning = roundedSeconds <= (matchType === '5x5' ? 5 : 3) && roundedSeconds > 0;

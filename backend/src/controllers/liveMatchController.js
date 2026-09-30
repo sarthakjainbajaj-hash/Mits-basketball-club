@@ -27,8 +27,7 @@ const getFullMatchData = async (matchId) => {
   if (!populatedMatch) return null;
 
   const responseData = populatedMatch.toObject();
-  responseData.remainingTime = populatedMatch.getCurrentRemainingTime();
-  responseData.shotClockRemaining = populatedMatch.getCurrentShotClockRemaining();
+  responseData.serverTime = Date.now();
   return responseData;
 };
 
@@ -526,7 +525,15 @@ const callTimeout = async (req, res) => {
       match.timeoutsB -= 1;
     }
 
-    // Auto-pause timer when timeout is called
+    // Auto-pause timer when timeout is called with accurate remaining time
+    if (match.timerRunning && match.timerStartedAt) {
+       const elapsed = (Date.now() - match.timerStartedAt) / 1000;
+       match.remainingTime = Math.max(0, Math.round((match.remainingTime - elapsed) * 10) / 10);
+    }
+    if (match.shotClockRunning && match.shotClockStartedAt) {
+       const scElapsed = (Date.now() - match.shotClockStartedAt) / 1000;
+       match.shotClockRemaining = Math.max(0, Math.round((match.shotClockRemaining - scElapsed) * 10) / 10);
+    }
     match.timerRunning = false;
     match.timerStartedAt = null;
     match.shotClockRunning = false;
@@ -1064,8 +1071,14 @@ const endMatch = async (req, res) => {
 
     match.status = 'COMPLETED';
     match.endedAt = new Date();
+    if (match.timerRunning && match.timerStartedAt) {
+      const elapsed = (Date.now() - match.timerStartedAt) / 1000;
+      match.remainingTime = Math.max(0, Math.round((match.remainingTime - elapsed) * 10) / 10);
+    }
     match.timerRunning = false;
+    match.timerStartedAt = null;
     match.shotClockRunning = false;
+    match.shotClockStartedAt = null;
 
     // Calculate winner
     if (match.scoreA > match.scoreB) {

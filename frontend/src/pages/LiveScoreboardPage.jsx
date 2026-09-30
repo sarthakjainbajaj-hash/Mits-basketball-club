@@ -85,8 +85,20 @@ const LiveScoreboardPage = () => {
     joinMatch(id);
 
     if (socket) {
-      socket.on('match-updated', ({ match: updatedMatch, latestEvent }) => {
-        setMatch(updatedMatch);
+      socket.on('match-updated', ({ match: updatedMatch, latestEvent, timestamp }) => {
+        setMatch((prev) => {
+          if (!prev) return { ...updatedMatch, serverTime: updatedMatch.serverTime || timestamp };
+          const isTimerActive = prev.timerRunning && updatedMatch.timerRunning;
+          return {
+            ...prev,
+            ...updatedMatch,
+            timerRunning: updatedMatch.timerRunning,
+            timerStartedAt: isTimerActive ? prev.timerStartedAt : updatedMatch.timerStartedAt,
+            serverTime: isTimerActive ? prev.serverTime : (updatedMatch.serverTime || timestamp),
+            shotClockRunning: updatedMatch.shotClockRunning,
+            shotClockStartedAt: isTimerActive ? prev.shotClockStartedAt : updatedMatch.shotClockStartedAt,
+          };
+        });
       });
 
       socket.on('buzzer-alert', ({ type, details }) => {
@@ -160,6 +172,7 @@ const LiveScoreboardPage = () => {
         status: prev.status === 'SCHEDULED' ? 'LIVE' : prev.status,
         timerRunning: true,
         timerStartedAt: now,
+        serverTime: now,
         shotClockRunning: true,
         shotClockStartedAt: now,
       };
@@ -169,7 +182,19 @@ const LiveScoreboardPage = () => {
     try {
       const res = await matchApi.start(id);
       if (res?.data) {
-        setMatch((prev) => ({ ...prev, ...res.data, timerRunning: true }));
+        setMatch((prev) => {
+          if (!prev) return res.data;
+          const keepTimer = prev.timerRunning && prev.timerStartedAt;
+          return {
+            ...prev,
+            ...res.data,
+            timerRunning: true,
+            timerStartedAt: keepTimer ? prev.timerStartedAt : res.data.timerStartedAt,
+            serverTime: keepTimer ? prev.serverTime : res.data.serverTime,
+            shotClockRunning: true,
+            shotClockStartedAt: keepTimer ? prev.shotClockStartedAt : res.data.shotClockStartedAt,
+          };
+        });
       }
     } catch (err) {
       setToast({ message: err.message || 'Failed to start timer', type: 'error' });
@@ -184,14 +209,16 @@ const LiveScoreboardPage = () => {
     // 0ms Optimistic Update
     setMatch((prev) => {
       if (!prev) return prev;
+      const offset = prev.serverTime ? now - prev.serverTime : 0;
+      const adjustedNow = now - offset;
       let newRemainingTime = prev.remainingTime;
       if (prev.timerRunning && prev.timerStartedAt) {
-        const elapsed = (now - prev.timerStartedAt) / 1000;
+        const elapsed = (adjustedNow - prev.timerStartedAt) / 1000;
         newRemainingTime = Math.max(0, Math.round((prev.remainingTime - elapsed) * 10) / 10);
       }
       let newScRemaining = prev.shotClockRemaining;
       if (prev.shotClockRunning && prev.shotClockStartedAt) {
-        const scElapsed = (now - prev.shotClockStartedAt) / 1000;
+        const scElapsed = (adjustedNow - prev.shotClockStartedAt) / 1000;
         newScRemaining = Math.max(0, Math.round((prev.shotClockRemaining - scElapsed) * 10) / 10);
       }
       return {
@@ -210,7 +237,14 @@ const LiveScoreboardPage = () => {
     try {
       const res = await matchApi.pause(id);
       if (res?.data) {
-        setMatch((prev) => ({ ...prev, ...res.data, timerRunning: false }));
+        setMatch((prev) => ({
+          ...prev,
+          ...res.data,
+          timerRunning: false,
+          timerStartedAt: null,
+          shotClockRunning: false,
+          shotClockStartedAt: null,
+        }));
       }
     } catch (err) {
       setToast({ message: err.message || 'Failed to pause timer', type: 'error' });
@@ -976,6 +1010,7 @@ const LiveScoreboardPage = () => {
                 remainingTime={match.remainingTime}
                 timerRunning={match.timerRunning}
                 timerStartedAt={match.timerStartedAt}
+                serverTime={match.serverTime}
                 onExpire={() => {
                   playGameEndHorn();
                   setToast({
@@ -992,6 +1027,7 @@ const LiveScoreboardPage = () => {
                 shotClockRemaining={match.shotClockRemaining}
                 shotClockRunning={match.shotClockRunning}
                 shotClockStartedAt={match.shotClockStartedAt}
+                serverTime={match.serverTime}
                 matchType={match.matchType || '3x3'}
                 onResetFull={() => handleShotClockAction('RESET_FULL')}
                 onResetShort={() => handleShotClockAction('RESET_SHORT')}

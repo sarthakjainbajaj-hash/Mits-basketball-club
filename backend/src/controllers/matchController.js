@@ -80,12 +80,8 @@ const getMatchById = async (req, res) => {
 
     const events = await MatchEvent.find({ matchId: match._id }).sort({ timestamp: 1 });
 
-    const currentRemainingTime = match.getCurrentRemainingTime();
-    const currentShotClockRemaining = match.getCurrentShotClockRemaining();
-
     const responseData = match.toObject();
-    responseData.remainingTime = currentRemainingTime;
-    responseData.shotClockRemaining = currentShotClockRemaining;
+    responseData.serverTime = Date.now();
     responseData.events = events;
 
     res.status(200).json({ success: true, data: responseData });
@@ -133,29 +129,35 @@ const createMatch = async (req, res) => {
       });
     }
 
-    // Strict Backend Roster Validation
-    const reqStarters = matchType === '3x3' ? 3 : 5;
-    const reqSubs = matchType === '3x3' ? 1 : 5;
-    const totalRequired = reqStarters + reqSubs;
+    // Official Roster Validation
+    if (matchType === '3x3') {
+      if (teamA_starters.length !== 3 || teamA_substitutes.length < 1 || teamA_substitutes.length > 2) {
+        return res.status(400).json({
+          success: false,
+          message: '3x3 requires 3 starting players and 1 or 2 substitutes (minimum 4 players) for Team A.',
+        });
+      }
 
-    if (teamA_starters.length !== reqStarters || teamA_substitutes.length !== reqSubs) {
-      return res.status(400).json({
-        success: false,
-        message:
-          matchType === '3x3'
-            ? '3x3 requires exactly 3 starting players and 1 substitute for Team A.'
-            : '5x5 requires exactly 5 starting players and 5 substitutes for Team A.',
-      });
-    }
+      if (teamB_starters.length !== 3 || teamB_substitutes.length < 1 || teamB_substitutes.length > 2) {
+        return res.status(400).json({
+          success: false,
+          message: '3x3 requires 3 starting players and 1 or 2 substitutes (minimum 4 players) for Team B.',
+        });
+      }
+    } else {
+      if (teamA_starters.length !== 5 || teamA_substitutes.length !== 5) {
+        return res.status(400).json({
+          success: false,
+          message: '5x5 requires exactly 5 starting players and 5 substitutes for Team A.',
+        });
+      }
 
-    if (teamB_starters.length !== reqStarters || teamB_substitutes.length !== reqSubs) {
-      return res.status(400).json({
-        success: false,
-        message:
-          matchType === '3x3'
-            ? '3x3 requires exactly 3 starting players and 1 substitute for Team B.'
-            : '5x5 requires exactly 5 starting players and 5 substitutes for Team B.',
-      });
+      if (teamB_starters.length !== 5 || teamB_substitutes.length !== 5) {
+        return res.status(400).json({
+          success: false,
+          message: '5x5 requires exactly 5 starting players and 5 substitutes for Team B.',
+        });
+      }
     }
 
     // Helper to format player documents into embedded schema

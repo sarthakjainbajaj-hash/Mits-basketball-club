@@ -42,8 +42,11 @@ const PublicScoreboardPage = () => {
     joinMatch(matchId);
 
     if (socket) {
-      socket.on('match-updated', ({ match: updatedMatch }) => {
-        setMatch(updatedMatch);
+      socket.on('match-updated', ({ match: updatedMatch, timestamp }) => {
+        setMatch({
+          ...updatedMatch,
+          serverTime: updatedMatch.serverTime || timestamp,
+        });
       });
 
       socket.on('buzzer-alert', ({ type }) => {
@@ -248,6 +251,7 @@ const PublicScoreboardPage = () => {
                 remainingTime={match.remainingTime}
                 timerRunning={match.timerRunning}
                 timerStartedAt={match.timerStartedAt}
+                serverTime={match.serverTime}
                 large={true}
               />
             </div>
@@ -258,6 +262,7 @@ const PublicScoreboardPage = () => {
                 shotClockRemaining={match.shotClockRemaining}
                 shotClockRunning={match.shotClockRunning}
                 shotClockStartedAt={match.shotClockStartedAt}
+                serverTime={match.serverTime}
                 matchType={match.matchType || '3x3'}
                 isScorer={false}
                 large={true}
