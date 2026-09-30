@@ -56,9 +56,9 @@ const CreateMatchPage = () => {
   const [teamBSubstitutes, setTeamBSubstitutes] = useState([]);
 
   const requiredStarters = matchType === '3x3' ? 3 : 5;
-  const minSubs = matchType === '3x3' ? 1 : 5;
-  const maxSubs = matchType === '3x3' ? 2 : 5;
-  const requiredSubs = matchType === '3x3' ? '1 to 2' : '5';
+  const minSubs = 1;
+  const maxSubs = matchType === '3x3' ? 2 : 7;
+  const requiredSubs = matchType === '3x3' ? '1 to 2' : '1 to 7';
 
   useEffect(() => {
     fetchOptions();
@@ -144,7 +144,10 @@ const CreateMatchPage = () => {
     }
 
     const nStarters = type === '3x3' ? 3 : 5;
-    const nSubs = type === '3x3' ? (teamDoc.players.length >= 5 ? 2 : 1) : 5;
+    const nSubs =
+      type === '3x3'
+        ? (teamDoc.players.length >= 5 ? 2 : 1)
+        : Math.min(7, Math.max(1, teamDoc.players.length - 5));
 
     // Prioritize Captain then Vice-Captain for starting roster
     const sortedPlayers = [...teamDoc.players].sort((a, b) => {
@@ -240,14 +243,14 @@ const CreateMatchPage = () => {
     const isTeamAValid =
       matchType === '3x3'
         ? teamAStarters.length === 3 && teamASubstitutes.length >= 1 && teamASubstitutes.length <= 2
-        : teamAStarters.length === 5 && teamASubstitutes.length === 5;
+        : teamAStarters.length === 5 && teamASubstitutes.length >= 1 && teamASubstitutes.length <= 7;
 
     if (!isTeamAValid) {
       setToast({
         message:
           matchType === '3x3'
             ? 'Team A requires 3 starters and 1 or 2 substitutes (minimum 4 players) for 3x3.'
-            : 'Team A requires exactly 5 starters and 5 substitutes (10 players) for 5x5.',
+            : 'Team A requires 5 starters and 1 to 7 substitutes (minimum 6 players) for 5x5.',
         type: 'error',
       });
       return;
@@ -257,14 +260,14 @@ const CreateMatchPage = () => {
     const isTeamBValid =
       matchType === '3x3'
         ? teamBStarters.length === 3 && teamBSubstitutes.length >= 1 && teamBSubstitutes.length <= 2
-        : teamBStarters.length === 5 && teamBSubstitutes.length === 5;
+        : teamBStarters.length === 5 && teamBSubstitutes.length >= 1 && teamBSubstitutes.length <= 7;
 
     if (!isTeamBValid) {
       setToast({
         message:
           matchType === '3x3'
             ? 'Team B requires 3 starters and 1 or 2 substitutes (minimum 4 players) for 3x3.'
-            : 'Team B requires exactly 5 starters and 5 substitutes (10 players) for 5x5.',
+            : 'Team B requires 5 starters and 1 to 7 substitutes (minimum 6 players) for 5x5.',
         type: 'error',
       });
       return;
@@ -321,7 +324,7 @@ const CreateMatchPage = () => {
     const isComplete =
       matchType === '3x3'
         ? starters.length === 3 && subs.length >= 1 && subs.length <= 2
-        : starters.length === 5 && subs.length === 5;
+        : starters.length === 5 && subs.length >= 1 && subs.length <= 7;
 
     return (
       <div className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-4">
@@ -361,12 +364,12 @@ const CreateMatchPage = () => {
                 ? subs.length >= 1 && subs.length <= 2
                   ? 'bg-emerald-950/70 text-emerald-400 border-emerald-800'
                   : 'bg-amber-950/70 text-amber-400 border-amber-800'
-                : subs.length === 5
+                : subs.length >= 1 && subs.length <= 7
                 ? 'bg-emerald-950/70 text-emerald-400 border-emerald-800'
                 : 'bg-amber-950/70 text-amber-400 border-amber-800'
             }`}
           >
-            Bench: {subs.length}/{maxSubs} {matchType === '3x3' ? '(min 1)' : ''}
+            Bench: {subs.length}/{maxSubs} (min 1)
           </span>
           {isComplete && (
             <span className="text-emerald-400 flex items-center gap-1 text-[11px]">
@@ -550,8 +553,8 @@ const CreateMatchPage = () => {
 
             <div className="mt-4 pt-4 border-t border-slate-800/80 grid grid-cols-3 gap-2 text-[11px] font-mono text-slate-400">
               <div>
-                <span className="text-white font-bold block">10 Players</span>
-                <span>5 On-Court + 5 Subs</span>
+                <span className="text-white font-bold block">Min 6 Players</span>
+                <span>5 On-Court + 1-7 Subs</span>
               </div>
               <div>
                 <span className="text-white font-bold block">24s Clock</span>
@@ -597,7 +600,7 @@ const CreateMatchPage = () => {
               <Shield className="w-4 h-4" /> Team Matchup ({matchType})
             </h2>
             <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-              Roster: {matchType === '3x3' ? '4-5 per team (3 Playing + 1-2 Subs, Min 4)' : '10 per team (5 Starters + 5 Subs)'}
+              Roster: {matchType === '3x3' ? '4-5 per team (3 Playing + 1-2 Subs, Min 4)' : '6-12 per team (5 Starters + 1-7 Subs, Min 6)'}
             </span>
           </div>
 
@@ -683,7 +686,7 @@ const CreateMatchPage = () => {
                   <Users className="w-4 h-4" /> Official Match Rosters ({matchType})
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Select {requiredStarters} on-court starters and {requiredSubs} bench substitute(s) for each team.
+                  Select {requiredStarters} on-court starters and {requiredSubs} bench substitute(s) (minimum {matchType === '3x3' ? 4 : 6} players total) for each team.
                 </p>
               </div>
             </div>

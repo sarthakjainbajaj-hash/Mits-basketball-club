@@ -162,6 +162,22 @@ const TeamsPage = () => {
     setAdditionalPlayers(newMembers);
   };
 
+  const handleLoad5x5MinTemplate = () => {
+    const leadershipCount = 1 + (formData.viceCaptain.trim() ? 1 : 0);
+    const needed = Math.max(1, 6 - leadershipCount);
+    const defaultJerseys = [3, 5, 15, 21, 23];
+    const positions = ['Guard', 'Forward', 'Center', 'Guard', 'Forward'];
+    const newMembers = [];
+    for (let i = 0; i < needed; i++) {
+      newMembers.push({
+        name: '',
+        jerseyNumber: defaultJerseys[i] || i + 2,
+        position: positions[i % positions.length],
+      });
+    }
+    setAdditionalPlayers(newMembers);
+  };
+
   const handleLoad5x5Template = () => {
     const leadershipCount = 1 + (formData.viceCaptain.trim() ? 1 : 0);
     const needed = Math.max(1, 10 - leadershipCount);
@@ -709,11 +725,19 @@ const TeamsPage = () => {
                     </button>
                     <button
                       type="button"
+                      onClick={handleLoad5x5MinTemplate}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 text-[11px] font-mono font-bold transition-colors"
+                      title="Populate minimum 6 players total (5 Starters + 1 Sub)"
+                    >
+                      ⚡ 5x5 Roster (Min 6)
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleLoad5x5Template}
                       className="px-2.5 py-1 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-700/60 text-blue-300 text-[11px] font-mono font-bold transition-colors"
                       title="Populate 10 players total (including Captain & Vice-Captain)"
                     >
-                      ⚡ 5x5 Roster (10)
+                      ⚡ 5x5 Full (10)
                     </button>
                     <button
                       type="button"

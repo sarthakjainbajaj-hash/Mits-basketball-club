@@ -145,17 +145,17 @@ const createMatch = async (req, res) => {
         });
       }
     } else {
-      if (teamA_starters.length !== 5 || teamA_substitutes.length !== 5) {
+      if (teamA_starters.length !== 5 || teamA_substitutes.length < 1 || teamA_substitutes.length > 7) {
         return res.status(400).json({
           success: false,
-          message: '5x5 requires exactly 5 starting players and 5 substitutes for Team A.',
+          message: '5x5 requires 5 starting players and 1 to 7 substitutes (minimum 6 players) for Team A.',
         });
       }
 
-      if (teamB_starters.length !== 5 || teamB_substitutes.length !== 5) {
+      if (teamB_starters.length !== 5 || teamB_substitutes.length < 1 || teamB_substitutes.length > 7) {
         return res.status(400).json({
           success: false,
-          message: '5x5 requires exactly 5 starting players and 5 substitutes for Team B.',
+          message: '5x5 requires 5 starting players and 1 to 7 substitutes (minimum 6 players) for Team B.',
         });
       }
     }
