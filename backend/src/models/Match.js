@@ -222,6 +222,10 @@ const matchSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    statsPersisted: {
+      type: Boolean,
+      default: false,
+    },
     playerStats: [matchPlayerStatSchema],
   },
   {

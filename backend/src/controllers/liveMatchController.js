@@ -200,6 +200,146 @@ const controlShotClock = async (req, res) => {
   }
 };
 
+// Helper: Persist cumulative stats for teams & players upon match completion (prevents double-counting)
+const persistMatchStats = async (match) => {
+  if (!match || match.statsPersisted) return;
+
+  const is3x3 = match.matchType === '3x3';
+  const formatKey = is3x3 ? 'matches3x3' : 'matches5x5';
+  const teamAId = match.teamA?._id || match.teamA;
+  const teamBId = match.teamB?._id || match.teamB;
+
+  const teamA = teamAId ? await Team.findById(teamAId) : null;
+  const teamB = teamBId ? await Team.findById(teamBId) : null;
+
+  if (teamA) {
+    teamA.stats = teamA.stats || {};
+    teamA.stats.played = (teamA.stats.played || 0) + 1;
+    teamA.stats.pointsFor = (teamA.stats.pointsFor || 0) + (match.scoreA || 0);
+    teamA.stats.pointsAgainst = (teamA.stats.pointsAgainst || 0) + (match.scoreB || 0);
+    if (match.winner === 'A') teamA.stats.wins = (teamA.stats.wins || 0) + 1;
+    if (match.winner === 'B') teamA.stats.losses = (teamA.stats.losses || 0) + 1;
+
+    if (!teamA.stats[formatKey]) {
+      teamA.stats[formatKey] = { played: 0, wins: 0, losses: 0 };
+    }
+    teamA.stats[formatKey].played = (teamA.stats[formatKey].played || 0) + 1;
+    if (match.winner === 'A') teamA.stats[formatKey].wins = (teamA.stats[formatKey].wins || 0) + 1;
+    if (match.winner === 'B') teamA.stats[formatKey].losses = (teamA.stats[formatKey].losses || 0) + 1;
+
+    await teamA.save();
+  }
+
+  if (teamB) {
+    teamB.stats = teamB.stats || {};
+    teamB.stats.played = (teamB.stats.played || 0) + 1;
+    teamB.stats.pointsFor = (teamB.stats.pointsFor || 0) + (match.scoreB || 0);
+    teamB.stats.pointsAgainst = (teamB.stats.pointsAgainst || 0) + (match.scoreA || 0);
+    if (match.winner === 'B') teamB.stats.wins = (teamB.stats.wins || 0) + 1;
+    if (match.winner === 'A') teamB.stats.losses = (teamB.stats.losses || 0) + 1;
+
+    if (!teamB.stats[formatKey]) {
+      teamB.stats[formatKey] = { played: 0, wins: 0, losses: 0 };
+    }
+    teamB.stats[formatKey].played = (teamB.stats[formatKey].played || 0) + 1;
+    if (match.winner === 'B') teamB.stats[formatKey].wins = (teamB.stats[formatKey].wins || 0) + 1;
+    if (match.winner === 'A') teamB.stats[formatKey].losses = (teamB.stats[formatKey].losses || 0) + 1;
+
+    await teamB.save();
+  }
+
+  if (match.playerStats && match.playerStats.length > 0) {
+    for (const pStat of match.playerStats) {
+      const targetPlayerId = pStat.playerId?._id || pStat.playerId;
+      if (targetPlayerId) {
+        await Player.findByIdAndUpdate(targetPlayerId, {
+          $inc: {
+            'stats.games': 1,
+            'stats.points': pStat.points || 0,
+            'stats.onePoints': pStat.onePoints || 0,
+            'stats.twoPoints': pStat.twoPoints || 0,
+            'stats.threePoints': pStat.threePoints || 0,
+            'stats.rebounds': pStat.rebounds || 0,
+            'stats.assists': pStat.assists || 0,
+            'stats.steals': pStat.steals || 0,
+            'stats.blocks': pStat.blocks || 0,
+            'stats.fouls': pStat.fouls || 0,
+          },
+        });
+      }
+    }
+  }
+
+  match.statsPersisted = true;
+};
+
+// Helper: Revert cumulative stats if a completed match is undone
+const revertMatchStats = async (match) => {
+  if (!match || !match.statsPersisted) return;
+
+  const is3x3 = match.matchType === '3x3';
+  const formatKey = is3x3 ? 'matches3x3' : 'matches5x5';
+  const teamAId = match.teamA?._id || match.teamA;
+  const teamBId = match.teamB?._id || match.teamB;
+
+  const teamA = teamAId ? await Team.findById(teamAId) : null;
+  const teamB = teamBId ? await Team.findById(teamBId) : null;
+
+  if (teamA && teamA.stats) {
+    teamA.stats.played = Math.max(0, (teamA.stats.played || 0) - 1);
+    teamA.stats.pointsFor = Math.max(0, (teamA.stats.pointsFor || 0) - (match.scoreA || 0));
+    teamA.stats.pointsAgainst = Math.max(0, (teamA.stats.pointsAgainst || 0) - (match.scoreB || 0));
+    if (match.winner === 'A') teamA.stats.wins = Math.max(0, (teamA.stats.wins || 0) - 1);
+    if (match.winner === 'B') teamA.stats.losses = Math.max(0, (teamA.stats.losses || 0) - 1);
+
+    if (teamA.stats[formatKey]) {
+      teamA.stats[formatKey].played = Math.max(0, (teamA.stats[formatKey].played || 0) - 1);
+      if (match.winner === 'A') teamA.stats[formatKey].wins = Math.max(0, (teamA.stats[formatKey].wins || 0) - 1);
+      if (match.winner === 'B') teamA.stats[formatKey].losses = Math.max(0, (teamA.stats[formatKey].losses || 0) - 1);
+    }
+    await teamA.save();
+  }
+
+  if (teamB && teamB.stats) {
+    teamB.stats.played = Math.max(0, (teamB.stats.played || 0) - 1);
+    teamB.stats.pointsFor = Math.max(0, (teamB.stats.pointsFor || 0) - (match.scoreB || 0));
+    teamB.stats.pointsAgainst = Math.max(0, (teamB.stats.pointsAgainst || 0) - (match.scoreA || 0));
+    if (match.winner === 'B') teamB.stats.wins = Math.max(0, (teamB.stats.wins || 0) - 1);
+    if (match.winner === 'A') teamB.stats.losses = Math.max(0, (teamB.stats.losses || 0) - 1);
+
+    if (teamB.stats[formatKey]) {
+      teamB.stats[formatKey].played = Math.max(0, (teamB.stats[formatKey].played || 0) - 1);
+      if (match.winner === 'B') teamB.stats[formatKey].wins = Math.max(0, (teamB.stats[formatKey].wins || 0) - 1);
+      if (match.winner === 'A') teamB.stats[formatKey].losses = Math.max(0, (teamB.stats[formatKey].losses || 0) - 1);
+    }
+    await teamB.save();
+  }
+
+  if (match.playerStats && match.playerStats.length > 0) {
+    for (const pStat of match.playerStats) {
+      const targetPlayerId = pStat.playerId?._id || pStat.playerId;
+      if (targetPlayerId) {
+        await Player.findByIdAndUpdate(targetPlayerId, {
+          $inc: {
+            'stats.games': -1,
+            'stats.points': -(pStat.points || 0),
+            'stats.onePoints': -(pStat.onePoints || 0),
+            'stats.twoPoints': -(pStat.twoPoints || 0),
+            'stats.threePoints': -(pStat.threePoints || 0),
+            'stats.rebounds': -(pStat.rebounds || 0),
+            'stats.assists': -(pStat.assists || 0),
+            'stats.steals': -(pStat.steals || 0),
+            'stats.blocks': -(pStat.blocks || 0),
+            'stats.fouls': -(pStat.fouls || 0),
+          },
+        });
+      }
+    }
+  }
+
+  match.statsPersisted = false;
+};
+
 // @desc    Update match score (+1, +2, +3, -1, -2, -3) with player attribution
 // @route   POST /api/matches/:id/score
 // @access  Private (Admin, Scorer)
@@ -344,6 +484,9 @@ const updateScore = async (req, res) => {
           finalScore: match.finalScore,
         });
       }
+
+      // Persist Team and Player career stats for sudden victory
+      await persistMatchStats(match);
     }
 
     await match.save();
@@ -963,6 +1106,7 @@ const undoLastAction = async (req, res) => {
         match.scoreA < (match.targetScore || 21) &&
         match.scoreB < (match.targetScore || 21)
       ) {
+        await revertMatchStats(match);
         match.status = 'LIVE';
         match.winner = null;
         match.winnerTeamId = null;
@@ -988,8 +1132,9 @@ const undoLastAction = async (req, res) => {
         match.possession = lastEvent.metadata.prevPossession;
       }
     } else if (lastEvent.type === 'TIMEOUT') {
-      if (lastEvent.team === 'A') match.timeoutsA = Math.min(1, match.timeoutsA + 1);
-      if (lastEvent.team === 'B') match.timeoutsB = Math.min(1, match.timeoutsB + 1);
+      const maxTimeouts = match.matchType === '5x5' ? 5 : 1;
+      if (lastEvent.team === 'A') match.timeoutsA = Math.min(maxTimeouts, match.timeoutsA + 1);
+      if (lastEvent.team === 'B') match.timeoutsB = Math.min(maxTimeouts, match.timeoutsB + 1);
     } else if (['REBOUND', 'ASSIST', 'STEAL', 'BLOCK'].includes(lastEvent.type)) {
       const statKey = lastEvent.type.toLowerCase() + 's';
       if (lastEvent.playerId && match.playerStats) {
@@ -1093,66 +1238,8 @@ const endMatch = async (req, res) => {
 
     match.finalScore = `${match.scoreA} - ${match.scoreB}`;
 
-    // Update Team stats in MongoDB
-    const teamA = await Team.findById(match.teamA);
-    const teamB = await Team.findById(match.teamB);
-
-    const is3x3 = match.matchType === '3x3';
-    const formatKey = is3x3 ? 'matches3x3' : 'matches5x5';
-
-    if (teamA) {
-      teamA.stats.played = (teamA.stats.played || 0) + 1;
-      teamA.stats.pointsFor = (teamA.stats.pointsFor || 0) + match.scoreA;
-      teamA.stats.pointsAgainst = (teamA.stats.pointsAgainst || 0) + match.scoreB;
-      if (match.winner === 'A') teamA.stats.wins = (teamA.stats.wins || 0) + 1;
-      if (match.winner === 'B') teamA.stats.losses = (teamA.stats.losses || 0) + 1;
-
-      if (!teamA.stats[formatKey]) {
-        teamA.stats[formatKey] = { played: 0, wins: 0, losses: 0 };
-      }
-      teamA.stats[formatKey].played = (teamA.stats[formatKey].played || 0) + 1;
-      if (match.winner === 'A') teamA.stats[formatKey].wins = (teamA.stats[formatKey].wins || 0) + 1;
-      if (match.winner === 'B') teamA.stats[formatKey].losses = (teamA.stats[formatKey].losses || 0) + 1;
-
-      await teamA.save();
-    }
-
-    if (teamB) {
-      teamB.stats.played = (teamB.stats.played || 0) + 1;
-      teamB.stats.pointsFor = (teamB.stats.pointsFor || 0) + match.scoreB;
-      teamB.stats.pointsAgainst = (teamB.stats.pointsAgainst || 0) + match.scoreA;
-      if (match.winner === 'B') teamB.stats.wins = (teamB.stats.wins || 0) + 1;
-      if (match.winner === 'A') teamB.stats.losses = (teamB.stats.losses || 0) + 1;
-
-      if (!teamB.stats[formatKey]) {
-        teamB.stats[formatKey] = { played: 0, wins: 0, losses: 0 };
-      }
-      teamB.stats[formatKey].played = (teamB.stats[formatKey].played || 0) + 1;
-      if (match.winner === 'B') teamB.stats[formatKey].wins = (teamB.stats[formatKey].wins || 0) + 1;
-      if (match.winner === 'A') teamB.stats[formatKey].losses = (teamB.stats[formatKey].losses || 0) + 1;
-
-      await teamB.save();
-    }
-
-    // Update Player stats in MongoDB
-    if (match.playerStats && match.playerStats.length > 0) {
-      for (const pStat of match.playerStats) {
-        await Player.findByIdAndUpdate(pStat.playerId, {
-          $inc: {
-            'stats.games': 1,
-            'stats.points': pStat.points || 0,
-            'stats.onePoints': pStat.onePoints || 0,
-            'stats.twoPoints': pStat.twoPoints || 0,
-            'stats.threePoints': pStat.threePoints || 0,
-            'stats.rebounds': pStat.rebounds || 0,
-            'stats.assists': pStat.assists || 0,
-            'stats.steals': pStat.steals || 0,
-            'stats.blocks': pStat.blocks || 0,
-            'stats.fouls': pStat.fouls || 0,
-          },
-        });
-      }
-    }
+    // Persist Team and Player stats to MongoDB (safely guarded by statsPersisted)
+    await persistMatchStats(match);
 
     await match.save();
 

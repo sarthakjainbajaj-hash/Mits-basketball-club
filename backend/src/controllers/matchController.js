@@ -299,6 +299,8 @@ const createMatch = async (req, res) => {
       foulLimit: matchSettings.foulLimit,
       currentPeriod: initialPeriod,
       periodScores: [{ period: initialPeriod, scoreA: 0, scoreB: 0 }],
+      timeoutsA: matchType === '5x5' ? 5 : 1,
+      timeoutsB: matchType === '5x5' ? 5 : 1,
       status: 'SCHEDULED',
       playerStats: initialPlayerStats,
     });
