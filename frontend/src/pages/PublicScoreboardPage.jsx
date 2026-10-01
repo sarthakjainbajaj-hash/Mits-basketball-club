@@ -19,6 +19,34 @@ const PublicScoreboardPage = () => {
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [activeTimeout, setActiveTimeout] = useState(null);
+
+  // Active Timeout Countdown Timer
+  useEffect(() => {
+    if (!activeTimeout || !activeTimeout.isRunning) return;
+
+    if (activeTimeout.remaining <= 0) {
+      playShotClockBuzzer();
+      playWhistle();
+      setActiveTimeout((prev) => (prev ? { ...prev, isRunning: false } : null));
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      setActiveTimeout((prev) => {
+        if (!prev || !prev.isRunning) return prev;
+        const nextSec = prev.remaining - 1;
+        if (nextSec <= 0) {
+          playShotClockBuzzer();
+          playWhistle();
+          return { ...prev, remaining: 0, isRunning: false };
+        }
+        return { ...prev, remaining: nextSec };
+      });
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [activeTimeout?.isRunning, activeTimeout?.remaining, playShotClockBuzzer, playWhistle]);
 
   useEffect(() => {
     fetchMatch();
@@ -56,7 +84,7 @@ const PublicScoreboardPage = () => {
         }));
       });
 
-      socket.on('buzzer-alert', ({ type }) => {
+      socket.on('buzzer-alert', ({ type, details }) => {
         if (type === 'SHOT_CLOCK') {
           playShotClockBuzzer();
         } else if (type === 'GAME_END') {
@@ -65,6 +93,15 @@ const PublicScoreboardPage = () => {
           playGameEndHorn();
         } else if (type === 'WHISTLE') {
           playWhistle();
+          if (details?.team) {
+            const dur = details.timeoutDuration || 60;
+            setActiveTimeout({
+              team: details.team,
+              remaining: dur,
+              total: dur,
+              isRunning: true,
+            });
+          }
         }
       });
     }
@@ -237,11 +274,32 @@ const PublicScoreboardPage = () => {
               isPossession={match.possession === 'A'}
               isScorer={false}
               large={true}
+              activeTimeout={activeTimeout}
             />
           </div>
 
           {/* Center Column: Possession, Game Clock, Shot Clock */}
           <div className="lg:col-span-4 flex flex-col items-center justify-center space-y-6">
+            {/* Active Timeout Hero Banner for Arena Display */}
+            {activeTimeout && (
+              <div className="w-full p-4 rounded-3xl bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500 shadow-2xl shadow-amber-500/30 flex flex-col items-center animate-pulse">
+                <span className="text-xs font-mono uppercase font-black text-amber-400 tracking-widest flex items-center gap-2 mb-1">
+                  <span className="w-3 h-3 rounded-full bg-amber-400 animate-ping inline-block" />
+                  TIMEOUT IN PROGRESS • {activeTimeout.team === 'A' ? (match.teamA?.name || 'TEAM A') : (match.teamB?.name || 'TEAM B')}
+                </span>
+                <span className="font-digital text-5xl sm:text-6xl font-black text-amber-300 led-amber tracking-[0.16em]">
+                  {Math.floor(activeTimeout.remaining / 60).toString().padStart(2, '0')}:
+                  {(activeTimeout.remaining % 60).toString().padStart(2, '0')}
+                </span>
+                <div className="w-full bg-slate-800/80 h-2 rounded-full overflow-hidden mt-3 border border-slate-700">
+                  <div
+                    className="bg-amber-400 h-full transition-all duration-1000 ease-linear rounded-full"
+                    style={{ width: `${Math.max(0, Math.min(100, (activeTimeout.remaining / (activeTimeout.total || 60)) * 100))}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <PossessionArrow
               possession={match.possession}
               teamAName={match.teamA?.shortName || 'TMA'}
@@ -298,6 +356,7 @@ const PublicScoreboardPage = () => {
               isPossession={match.possession === 'B'}
               isScorer={false}
               large={true}
+              activeTimeout={activeTimeout}
             />
           </div>
         </div>

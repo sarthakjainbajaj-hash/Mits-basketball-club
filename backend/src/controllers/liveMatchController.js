@@ -89,12 +89,18 @@ const pauseMatch = async (req, res) => {
     const match = await Match.findById(req.params.id);
     if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
 
-    if (match.timerRunning && match.timerStartedAt) {
+    const { remainingTime, shotClockRemaining } = req.body;
+
+    if (remainingTime !== undefined && !isNaN(Number(remainingTime))) {
+      match.remainingTime = Math.max(0, Math.round(Number(remainingTime) * 10) / 10);
+    } else if (match.timerRunning && match.timerStartedAt) {
       const elapsed = (Date.now() - match.timerStartedAt) / 1000;
       match.remainingTime = Math.max(0, Math.round((match.remainingTime - elapsed) * 10) / 10);
     }
 
-    if (match.shotClockRunning && match.shotClockStartedAt) {
+    if (shotClockRemaining !== undefined && !isNaN(Number(shotClockRemaining))) {
+      match.shotClockRemaining = Math.max(0, Math.round(Number(shotClockRemaining) * 10) / 10);
+    } else if (match.shotClockRunning && match.shotClockStartedAt) {
       const scElapsed = (Date.now() - match.shotClockStartedAt) / 1000;
       match.shotClockRemaining = Math.max(0, Math.round((match.shotClockRemaining - scElapsed) * 10) / 10);
     }
@@ -647,7 +653,7 @@ const togglePossession = async (req, res) => {
 // @access  Private (Admin, Scorer)
 const callTimeout = async (req, res) => {
   try {
-    const { team } = req.body;
+    const { team, remainingTime, shotClockRemaining, timeoutDuration } = req.body;
     if (!['A', 'B'].includes(team)) {
       return res.status(400).json({ success: false, message: 'Valid team (A or B) is required' });
     }
@@ -667,15 +673,26 @@ const callTimeout = async (req, res) => {
       match.timeoutsB -= 1;
     }
 
+    if (timeoutDuration && !isNaN(Number(timeoutDuration))) {
+      match.timeoutDuration = Number(timeoutDuration);
+      if (match.settings) match.settings.timeoutDuration = Number(timeoutDuration);
+    }
+
     // Auto-pause timer when timeout is called with accurate remaining time
-    if (match.timerRunning && match.timerStartedAt) {
+    if (remainingTime !== undefined && !isNaN(Number(remainingTime))) {
+      match.remainingTime = Math.max(0, Math.round(Number(remainingTime) * 10) / 10);
+    } else if (match.timerRunning && match.timerStartedAt) {
        const elapsed = (Date.now() - match.timerStartedAt) / 1000;
        match.remainingTime = Math.max(0, Math.round((match.remainingTime - elapsed) * 10) / 10);
     }
-    if (match.shotClockRunning && match.shotClockStartedAt) {
+
+    if (shotClockRemaining !== undefined && !isNaN(Number(shotClockRemaining))) {
+      match.shotClockRemaining = Math.max(0, Math.round(Number(shotClockRemaining) * 10) / 10);
+    } else if (match.shotClockRunning && match.shotClockStartedAt) {
        const scElapsed = (Date.now() - match.shotClockStartedAt) / 1000;
        match.shotClockRemaining = Math.max(0, Math.round((match.shotClockRemaining - scElapsed) * 10) / 10);
     }
+
     match.timerRunning = false;
     match.timerStartedAt = null;
     match.shotClockRunning = false;
@@ -684,22 +701,29 @@ const callTimeout = async (req, res) => {
 
     await match.save();
 
+    const effectiveTimeoutSecs = Number(timeoutDuration) || match.timeoutDuration || 60;
+
     const event = await MatchEvent.create({
       matchId: match._id,
       type: 'TIMEOUT',
       team,
       gameTime: formatTime(match.getCurrentRemainingTime()),
       metadata: {
-        description: `Timeout called by Team ${team} (${team === 'A' ? match.timeoutsA : match.timeoutsB} left)`,
+        timeoutDuration: effectiveTimeoutSecs,
+        description: `Timeout called by Team ${team} (${team === 'A' ? match.timeoutsA : match.timeoutsB} left, ${effectiveTimeoutSecs}s clock)`,
       },
     });
 
-    // Whistle buzzer for timeout
+    // Whistle buzzer for timeout with timeoutDuration details
     const io = req.app.get('io');
-    broadcastBuzzerAlert(io, match._id.toString(), 'WHISTLE', { message: `Timeout Team ${team}` });
+    broadcastBuzzerAlert(io, match._id.toString(), 'WHISTLE', {
+      message: `Timeout Team ${team}`,
+      team,
+      timeoutDuration: effectiveTimeoutSecs,
+    });
 
     const responseData = await broadcastState(req, match, event);
-    res.status(200).json({ success: true, data: responseData || match, event });
+    res.status(200).json({ success: true, data: responseData || match, event, timeoutDuration: effectiveTimeoutSecs });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

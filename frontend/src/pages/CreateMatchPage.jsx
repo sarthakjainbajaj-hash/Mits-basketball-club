@@ -47,6 +47,7 @@ const CreateMatchPage = () => {
     shotClockDuration: 12,
     targetScore: 21,
     foulLimit: 7,
+    timeoutDuration: 60,
   });
 
   // Selected Rosters
@@ -77,6 +78,7 @@ const CreateMatchPage = () => {
         shotClockDuration: 12,
         targetScore: 21,
         foulLimit: 7,
+        timeoutDuration: prev.timeoutDuration || 60,
       }));
     } else {
       setFormData((prev) => ({
@@ -88,6 +90,7 @@ const CreateMatchPage = () => {
         shotClockDuration: 24,
         targetScore: 0,
         foulLimit: 5,
+        timeoutDuration: prev.timeoutDuration || 60,
       }));
     }
 
@@ -295,11 +298,13 @@ const CreateMatchPage = () => {
           numberOfQuarters: matchType === '5x5' ? Number(formData.numberOfQuarters || 4) : 1,
           quarterDuration: Number(formData.quarterDuration || 600),
           foulLimit: Number(formData.foulLimit),
+          timeoutDuration: Number(formData.timeoutDuration || 60),
         },
         gameDuration: Number(formData.gameDuration),
         shotClockDuration: Number(formData.shotClockDuration),
         targetScore: Number(formData.targetScore),
         foulLimit: Number(formData.foulLimit),
+        timeoutDuration: Number(formData.timeoutDuration || 60),
       };
 
       const res = await matchApi.create(payload);
@@ -755,7 +760,7 @@ const CreateMatchPage = () => {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <div>
               <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
                 {matchType === '3x3' ? 'Game Duration (Sec)' : 'Quarter Duration (Sec)'}
@@ -827,6 +832,24 @@ const CreateMatchPage = () => {
               />
               <span className="text-[10px] text-slate-500">
                 {matchType === '3x3' ? '7 fouls penalty' : '5 fouls per quarter'}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                Timeout Clock
+              </label>
+              <select
+                value={formData.timeoutDuration}
+                onChange={(e) => setFormData({ ...formData, timeoutDuration: Number(e.target.value) })}
+                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+              >
+                <option value={60}>60s (1 Min - Standard)</option>
+                <option value={120}>120s (2 Min - Full)</option>
+                <option value={30}>30s (Short Timeout)</option>
+              </select>
+              <span className="text-[10px] text-slate-500">
+                Duration per timeout call
               </span>
             </div>
           </div>

@@ -62,6 +62,46 @@ const LiveScoreboardPage = () => {
     team: 'A',
   });
 
+  // Timeout Clock State (1 Min / 2 Min changable duration countdown)
+  const [activeTimeout, setActiveTimeout] = useState(null); // { team: 'A'|'B', remaining: number, total: number, isRunning: boolean }
+  const [customTimeoutDuration, setCustomTimeoutDuration] = useState(null);
+  const timeoutDuration = customTimeoutDuration ?? (match?.settings?.timeoutDuration || match?.timeoutDuration || 60);
+
+  // Active Timeout Countdown Timer
+  useEffect(() => {
+    if (!activeTimeout || !activeTimeout.isRunning) return;
+
+    if (activeTimeout.remaining <= 0) {
+      playShotClockBuzzer();
+      playWhistle();
+      setToast({
+        message: `⏱️ Timeout for ${activeTimeout.team === 'A' ? (match?.teamA?.name || 'Team A') : (match?.teamB?.name || 'Team B')} EXPIRED!`,
+        type: 'warning',
+      });
+      setActiveTimeout((prev) => (prev ? { ...prev, isRunning: false } : null));
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      setActiveTimeout((prev) => {
+        if (!prev || !prev.isRunning) return prev;
+        const nextSec = prev.remaining - 1;
+        if (nextSec <= 0) {
+          playShotClockBuzzer();
+          playWhistle();
+          setToast({
+            message: `⏱️ Timeout for ${prev.team === 'A' ? (match?.teamA?.name || 'Team A') : (match?.teamB?.name || 'Team B')} EXPIRED!`,
+            type: 'warning',
+          });
+          return { ...prev, remaining: 0, isRunning: false };
+        }
+        return { ...prev, remaining: nextSec };
+      });
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [activeTimeout?.isRunning, activeTimeout?.remaining, playShotClockBuzzer, playWhistle, match?.teamA?.name, match?.teamB?.name]);
+
   // Fetch initial match state
   useEffect(() => {
     fetchMatch();
@@ -79,13 +119,24 @@ const LiveScoreboardPage = () => {
     }
   };
 
-  // Defensive state merger ensuring populated team/roster data is never clobbered
+  // Defensive state merger ensuring populated team/roster data and running timer are never clobbered
   const mergeMatchState = (prev, incoming, extra = {}) => {
     if (!prev) return incoming ? { ...incoming, ...extra } : null;
     if (!incoming) return { ...prev, ...extra };
+
+    // If timer is running locally and also running in incoming update, DO NOT clobber running timer references
+    const isTimerActive = prev.timerRunning && incoming.timerRunning;
+
     return {
       ...prev,
       ...incoming,
+      remainingTime: isTimerActive ? prev.remainingTime : (incoming.remainingTime ?? prev.remainingTime),
+      timerRunning: incoming.timerRunning !== undefined ? incoming.timerRunning : prev.timerRunning,
+      timerStartedAt: isTimerActive ? prev.timerStartedAt : (incoming.timerStartedAt ?? prev.timerStartedAt),
+      serverTime: isTimerActive ? prev.serverTime : (incoming.serverTime ?? prev.serverTime),
+      shotClockRemaining: isTimerActive ? prev.shotClockRemaining : (incoming.shotClockRemaining ?? prev.shotClockRemaining),
+      shotClockRunning: incoming.shotClockRunning !== undefined ? incoming.shotClockRunning : prev.shotClockRunning,
+      shotClockStartedAt: isTimerActive ? prev.shotClockStartedAt : (incoming.shotClockStartedAt ?? prev.shotClockStartedAt),
       teamA: (incoming.teamA && typeof incoming.teamA === 'object' && incoming.teamA.name)
         ? incoming.teamA
         : prev.teamA,
@@ -137,6 +188,15 @@ const LiveScoreboardPage = () => {
           setToast({ message: `${details?.period || 'Quarter'} Ended!`, type: 'info' });
         } else if (type === 'WHISTLE') {
           playWhistle();
+          if (details?.team) {
+            const duration = details.timeoutDuration || 60;
+            setActiveTimeout({
+              team: details.team,
+              remaining: duration,
+              total: duration,
+              isRunning: true,
+            });
+          }
         }
       });
     }
@@ -228,21 +288,25 @@ const LiveScoreboardPage = () => {
     const now = Date.now();
     playClick();
 
+    let calculatedRemainingTime = match?.remainingTime || 0;
+    let calculatedScRemaining = match?.shotClockRemaining || 0;
+
     // 0ms Optimistic Update
     setMatch((prev) => {
       if (!prev) return prev;
-      const offset = prev.serverTime ? now - prev.serverTime : 0;
-      const adjustedNow = now - offset;
       let newRemainingTime = prev.remainingTime;
       if (prev.timerRunning && prev.timerStartedAt) {
-        const elapsed = (adjustedNow - prev.timerStartedAt) / 1000;
+        const elapsed = (now - prev.timerStartedAt) / 1000;
         newRemainingTime = Math.max(0, Math.round((prev.remainingTime - elapsed) * 10) / 10);
       }
       let newScRemaining = prev.shotClockRemaining;
       if (prev.shotClockRunning && prev.shotClockStartedAt) {
-        const scElapsed = (adjustedNow - prev.shotClockStartedAt) / 1000;
+        const scElapsed = (now - prev.shotClockStartedAt) / 1000;
         newScRemaining = Math.max(0, Math.round((prev.shotClockRemaining - scElapsed) * 10) / 10);
       }
+      calculatedRemainingTime = newRemainingTime;
+      calculatedScRemaining = newScRemaining;
+
       return {
         ...prev,
         status: prev.status === 'LIVE' ? 'PAUSED' : prev.status,
@@ -257,13 +321,18 @@ const LiveScoreboardPage = () => {
     setToast({ message: 'Game timer paused (0ms)', type: 'info' });
 
     try {
-      const res = await matchApi.pause(id);
+      const res = await matchApi.pause(id, {
+        remainingTime: calculatedRemainingTime,
+        shotClockRemaining: calculatedScRemaining,
+      });
       if (res?.data) {
         setMatch((prev) => mergeMatchState(prev, res.data, {
           timerRunning: false,
           timerStartedAt: null,
+          remainingTime: calculatedRemainingTime,
           shotClockRunning: false,
           shotClockStartedAt: null,
+          shotClockRemaining: calculatedScRemaining,
         }));
       }
     } catch (err) {
@@ -485,31 +554,111 @@ const LiveScoreboardPage = () => {
     }
   };
 
-  // Timeout Handler with 0ms Optimistic UI Update
+  // Timeout Handler with 0ms Optimistic UI Update & Active Timeout Clock
   const handleCallTimeout = async (team) => {
+    const now = Date.now();
     playWhistle();
+
+    let calculatedRemainingTime = match?.remainingTime || 0;
+    let calculatedScRemaining = match?.shotClockRemaining || 0;
+
     // 0ms Optimistic Update
     setMatch((prev) => {
       if (!prev) return prev;
+      let newRemainingTime = prev.remainingTime;
+      if (prev.timerRunning && prev.timerStartedAt) {
+        const elapsed = (now - prev.timerStartedAt) / 1000;
+        newRemainingTime = Math.max(0, Math.round((prev.remainingTime - elapsed) * 10) / 10);
+      }
+      let newScRemaining = prev.shotClockRemaining;
+      if (prev.shotClockRunning && prev.shotClockStartedAt) {
+        const scElapsed = (now - prev.shotClockStartedAt) / 1000;
+        newScRemaining = Math.max(0, Math.round((prev.shotClockRemaining - scElapsed) * 10) / 10);
+      }
+      calculatedRemainingTime = newRemainingTime;
+      calculatedScRemaining = newScRemaining;
+
       return {
         ...prev,
+        status: prev.status === 'LIVE' ? 'PAUSED' : prev.status,
         timeoutsA: team === 'A' ? Math.max(0, prev.timeoutsA - 1) : prev.timeoutsA,
         timeoutsB: team === 'B' ? Math.max(0, prev.timeoutsB - 1) : prev.timeoutsB,
         timerRunning: false,
         timerStartedAt: null,
+        remainingTime: newRemainingTime,
         shotClockRunning: false,
         shotClockStartedAt: null,
+        shotClockRemaining: newScRemaining,
       };
     });
-    setToast({ message: `Timeout called by Team ${team} (0ms)`, type: 'warning' });
+
+    // Start local timeout clock countdown
+    setActiveTimeout({
+      team,
+      remaining: timeoutDuration,
+      total: timeoutDuration,
+      isRunning: true,
+    });
+
+    const teamName = team === 'A' ? (match?.teamA?.name || 'Team A') : (match?.teamB?.name || 'Team B');
+    setToast({
+      message: `⏱️ ${timeoutDuration >= 60 ? `${Math.floor(timeoutDuration / 60)} Min` : `${timeoutDuration}s`} Timeout for ${teamName} started!`,
+      type: 'warning',
+    });
 
     try {
-      const res = await matchApi.callTimeout(id, team);
-      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
+      const res = await matchApi.callTimeout(id, {
+        team,
+        remainingTime: calculatedRemainingTime,
+        shotClockRemaining: calculatedScRemaining,
+        timeoutDuration,
+      });
+      if (res?.data) {
+        setMatch((prev) => mergeMatchState(prev, res.data, {
+          timerRunning: false,
+          timerStartedAt: null,
+          remainingTime: calculatedRemainingTime,
+          shotClockRunning: false,
+          shotClockStartedAt: null,
+          shotClockRemaining: calculatedScRemaining,
+        }));
+      }
     } catch (err) {
       setToast({ message: err.message || 'Failed to call timeout', type: 'error' });
       fetchMatch();
     }
+  };
+
+  const handleChangeTimeoutDuration = async (newDuration) => {
+    setCustomTimeoutDuration(newDuration);
+    setToast({
+      message: `Timeout clock set to ${newDuration >= 60 ? `${Math.floor(newDuration / 60)} Min` : `${newDuration}s`}`,
+      type: 'info',
+    });
+    try {
+      await matchApi.update(id, {
+        timeoutDuration: newDuration,
+        'settings.timeoutDuration': newDuration,
+      });
+    } catch {
+      // Non-blocking
+    }
+  };
+
+  const handleTogglePauseTimeout = () => {
+    playClick();
+    setActiveTimeout((prev) => (prev ? { ...prev, isRunning: !prev.isRunning } : null));
+  };
+
+  const handleResetTimeoutClock = (seconds = null) => {
+    playClick();
+    const dur = seconds || activeTimeout?.total || timeoutDuration || 60;
+    setActiveTimeout((prev) => (prev ? { ...prev, remaining: dur, total: dur, isRunning: true } : null));
+  };
+
+  const handleDismissTimeout = () => {
+    playClick();
+    setActiveTimeout(null);
   };
 
   // Substitution Handler
@@ -1005,11 +1154,80 @@ const LiveScoreboardPage = () => {
               onSubFoul={handleFoulAction}
               onCallTimeout={handleCallTimeout}
               onOpenSubstitution={() => setSubModal({ isOpen: true, team: 'A' })}
+              activeTimeout={activeTimeout}
+              timeoutDuration={timeoutDuration}
+              onChangeTimeoutDuration={handleChangeTimeoutDuration}
+              onTogglePauseTimeout={handleTogglePauseTimeout}
+              onDismissTimeout={handleDismissTimeout}
             />
           </div>
 
           {/* Center Column: Timer, Shot Clock, Possession, Game Clock Controls */}
           <div className="lg:col-span-4 flex flex-col items-center justify-center space-y-4">
+            {/* Active Timeout Hero Banner */}
+            {activeTimeout && (
+              <div className="w-full p-4 rounded-3xl bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-500/80 shadow-2xl shadow-amber-500/20 flex flex-col items-center animate-in fade-in zoom-in-95">
+                <div className="flex items-center justify-between w-full mb-1">
+                  <span className="text-[11px] font-mono uppercase font-black text-amber-400 tracking-widest flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping inline-block" />
+                    TIMEOUT • {activeTimeout.team === 'A' ? (match.teamA?.name || 'TEAM A') : (match.teamB?.name || 'TEAM B')}
+                  </span>
+                  <button
+                    onClick={handleDismissTimeout}
+                    className="text-slate-400 hover:text-white text-xs font-mono px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700"
+                    title="Close Timeout Clock"
+                  >
+                    ✕ Dismiss
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 my-1">
+                  <span className="font-digital text-4xl sm:text-5xl font-black text-amber-300 led-amber tracking-[0.16em]">
+                    {Math.floor(activeTimeout.remaining / 60).toString().padStart(2, '0')}:
+                    {(activeTimeout.remaining % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden my-1.5 border border-slate-700">
+                  <div
+                    className="bg-amber-400 h-full transition-all duration-1000 ease-linear rounded-full"
+                    style={{ width: `${Math.max(0, Math.min(100, (activeTimeout.remaining / (activeTimeout.total || 60)) * 100))}%` }}
+                  />
+                </div>
+
+                {/* Controls */}
+                {isScorer && !isCompleted && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+                    <button
+                      onClick={handleTogglePauseTimeout}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-mono text-xs font-bold border border-amber-500/40 flex items-center gap-1"
+                    >
+                      {activeTimeout.isRunning ? '⏸ Pause' : '▶ Resume'}
+                    </button>
+                    <button
+                      onClick={() => handleResetTimeoutClock(60)}
+                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs font-bold border border-slate-700"
+                    >
+                      ↺ 1 Min
+                    </button>
+                    <button
+                      onClick={() => handleResetTimeoutClock(120)}
+                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs font-bold border border-slate-700"
+                    >
+                      ↺ 2 Min
+                    </button>
+                    <button
+                      onClick={handleDismissTimeout}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold shadow-md"
+                    >
+                      ✓ End Timeout
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Possession Indicator */}
             <PossessionArrow
               possession={match.possession}
@@ -1081,6 +1299,11 @@ const LiveScoreboardPage = () => {
               onSubFoul={handleFoulAction}
               onCallTimeout={handleCallTimeout}
               onOpenSubstitution={() => setSubModal({ isOpen: true, team: 'B' })}
+              activeTimeout={activeTimeout}
+              timeoutDuration={timeoutDuration}
+              onChangeTimeoutDuration={handleChangeTimeoutDuration}
+              onTogglePauseTimeout={handleTogglePauseTimeout}
+              onDismissTimeout={handleDismissTimeout}
             />
           </div>
         </div>

@@ -149,6 +149,7 @@ const matchSchema = new mongoose.Schema(
       numberOfQuarters: { type: Number, default: 1 },
       quarterDuration: { type: Number, default: 600 },
       foulLimit: { type: Number, default: 7 },
+      timeoutDuration: { type: Number, default: 60 }, // 30, 60 (1 min), 120 (2 min)
     },
 
     // Legacy fields maintained for quick access
@@ -158,6 +159,7 @@ const matchSchema = new mongoose.Schema(
     shotClockRemaining: { type: Number, default: 12 },
     targetScore: { type: Number, default: 21 },
     foulLimit: { type: Number, default: 7 },
+    timeoutDuration: { type: Number, default: 60 },
 
     // Quarter / Period System
     currentPeriod: {

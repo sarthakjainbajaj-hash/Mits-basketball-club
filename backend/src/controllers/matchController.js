@@ -267,6 +267,7 @@ const createMatch = async (req, res) => {
       numberOfQuarters: settings.numberOfQuarters || (matchType === '3x3' ? 1 : 4),
       quarterDuration: settings.quarterDuration || (matchType === '3x3' ? 600 : 600),
       foulLimit: settings.foulLimit || (matchType === '3x3' ? 7 : 5),
+      timeoutDuration: Number(settings.timeoutDuration) || 60,
     };
 
     const initialPeriod = matchType === '3x3' ? 'REGULATION' : 'Q1';
@@ -297,6 +298,7 @@ const createMatch = async (req, res) => {
       shotClockRemaining: matchSettings.shotClock,
       targetScore: matchSettings.targetScore,
       foulLimit: matchSettings.foulLimit,
+      timeoutDuration: matchSettings.timeoutDuration,
       currentPeriod: initialPeriod,
       periodScores: [{ period: initialPeriod, scoreA: 0, scoreB: 0 }],
       timeoutsA: matchType === '5x5' ? 5 : 1,

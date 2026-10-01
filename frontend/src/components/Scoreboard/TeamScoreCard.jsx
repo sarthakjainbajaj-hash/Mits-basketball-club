@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Minus, Clock, Shield, ArrowRightLeft } from 'lucide-react';
+import { Plus, Minus, Clock, Shield, ArrowRightLeft, Play, Pause } from 'lucide-react';
 import FoulTracker from './FoulTracker';
 
 const TeamScoreCard = ({
@@ -17,6 +17,11 @@ const TeamScoreCard = ({
   onSubFoul = null,
   onCallTimeout = null,
   onOpenSubstitution = null,
+  activeTimeout = null,
+  timeoutDuration = 60,
+  onChangeTimeoutDuration = null,
+  onTogglePauseTimeout = null,
+  onDismissTimeout = null,
   large = false,
 }) => {
   const teamName = teamData?.name || `Team ${team}`;
@@ -199,35 +204,83 @@ const TeamScoreCard = ({
         />
 
         {/* Timeouts & In-Game Substitution Row */}
-        <div className="flex items-center justify-between w-full max-w-xs mt-1 px-2 text-xs font-mono text-slate-400">
-          <div className="flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-slate-500" />
-            <span>TIMEOUTS:</span>
-            <span className={`font-bold ${timeouts > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {timeouts}
-            </span>
-          </div>
+        <div className="flex flex-col gap-1.5 w-full max-w-xs mt-1 px-2 text-xs font-mono text-slate-400">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-500" />
+              <span>TIMEOUTS:</span>
+              <span className={`font-bold ${timeouts > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {timeouts}
+              </span>
+            </div>
 
-          <div className="flex items-center gap-1.5">
-            {isScorer && onCallTimeout && (
-              <button
-                onClick={() => onCallTimeout(team)}
-                disabled={timeouts <= 0}
-                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300 disabled:opacity-30 border border-slate-700 transition-colors"
-              >
-                CALL TO
-              </button>
-            )}
+            <div className="flex items-center gap-1.5">
+              {activeTimeout && activeTimeout.team === team ? (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/60 shadow-sm animate-pulse">
+                  <span className="text-[10px] font-bold text-amber-400 tracking-wider">TO:</span>
+                  <span className="font-digital text-sm font-black text-amber-300 tracking-widest">
+                    {Math.floor(activeTimeout.remaining / 60).toString().padStart(2, '0')}:
+                    {(activeTimeout.remaining % 60).toString().padStart(2, '0')}
+                  </span>
+                  {isScorer && onTogglePauseTimeout && (
+                    <button
+                      type="button"
+                      onClick={onTogglePauseTimeout}
+                      className="p-0.5 rounded hover:bg-amber-500/30 text-amber-300 ml-0.5"
+                      title={activeTimeout.isRunning ? 'Pause Timeout Clock' : 'Resume Timeout Clock'}
+                    >
+                      {activeTimeout.isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                    </button>
+                  )}
+                  {isScorer && onDismissTimeout && (
+                    <button
+                      type="button"
+                      onClick={onDismissTimeout}
+                      className="p-0.5 rounded hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold ml-0.5"
+                      title="End Timeout"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ) : (
+                isScorer && onCallTimeout && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onCallTimeout(team)}
+                      disabled={timeouts <= 0}
+                      className="px-2 py-0.5 rounded bg-amber-950/70 hover:bg-amber-900/90 text-[11px] font-bold text-amber-300 disabled:opacity-30 border border-amber-700/80 transition-colors shadow-sm"
+                      title={`Call Timeout (${timeoutDuration === 120 ? '2 Minutes' : timeoutDuration === 30 ? '30 Seconds' : '1 Minute'})`}
+                    >
+                      CALL TO
+                    </button>
+                    {onChangeTimeoutDuration && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextDuration = timeoutDuration === 60 ? 120 : timeoutDuration === 120 ? 30 : 60;
+                          onChangeTimeoutDuration(nextDuration);
+                        }}
+                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono font-bold text-amber-400 border border-slate-700 transition-colors"
+                        title="Click to cycle timeout duration: 1 min / 2 min / 30s"
+                      >
+                        ⏱️ {timeoutDuration === 120 ? '2m' : timeoutDuration === 30 ? '30s' : '1m'}
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
 
-            {isScorer && onOpenSubstitution && (
-              <button
-                onClick={() => onOpenSubstitution(team)}
-                className="px-2 py-0.5 rounded bg-indigo-950/80 hover:bg-indigo-900 text-[11px] font-bold text-indigo-300 border border-indigo-700/60 flex items-center gap-1 transition-colors active:scale-95"
-                title="Substitute Active / Bench Players"
-              >
-                <ArrowRightLeft className="w-3 h-3" /> SUB
-              </button>
-            )}
+              {isScorer && onOpenSubstitution && (
+                <button
+                  onClick={() => onOpenSubstitution(team)}
+                  className="px-2 py-0.5 rounded bg-indigo-950/80 hover:bg-indigo-900 text-[11px] font-bold text-indigo-300 border border-indigo-700/60 flex items-center gap-1 transition-colors active:scale-95"
+                  title="Substitute Active / Bench Players"
+                >
+                  <ArrowRightLeft className="w-3 h-3" /> SUB
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
