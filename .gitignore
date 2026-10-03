@@ -15,7 +15,8 @@ frontend/dist/
 dist-ssr/
 
 # Legacy Archives
-legacy_portfolio/
+legacy_portfolio/node_modules/
+legacy_portfolio/dist/
 
 # Logs
 logs/

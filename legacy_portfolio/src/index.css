@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+:root {
+  --house-primary: #7f1d1d;
+  --house-secondary: #d4af37;
+}
+
+html[data-house="stark"] {
+  --house-primary: #334155;
+  --house-secondary: #94a3b8;
+}
+
+html[data-house="lannister"] {
+  --house-primary: #991b1b;
+  --house-secondary: #d4af37;
+}
+
+html[data-house="targaryen"] {
+  --house-primary: #7f1d1d;
+  --house-secondary: #f97316;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased transition-colors duration-300 dark:bg-[#0a0d14] dark:text-slate-100;
+}
+
+@layer components {
+  .section-wrap {
+    @apply mx-auto w-full max-w-6xl px-5 py-20 md:px-8;
+  }
+
+  .section-title {
+    @apply text-3xl font-bold tracking-tight sm:text-4xl font-heading text-brand-600 dark:text-gold-400;
+  }
+
+  .glass-card {
+    @apply border border-slate-200/80 bg-white/90 backdrop-blur-sm dark:border-brand-700/40 dark:bg-slate-900/80;
+  }
+
+  .section-badge {
+    display: inline-block;
+    margin-bottom: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--house-secondary) 60%, #ffffff 40%);
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--house-primary) 35%, #020617 65%);
+    color: var(--house-secondary);
+    padding: 0.25rem 0.75rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .parchment-card {
+    border: 1px solid rgba(120, 53, 15, 0.25);
+    background:
+      radial-gradient(circle at top left, rgba(255, 251, 235, 0.95), rgba(253, 230, 138, 0.85)),
+      linear-gradient(135deg, #fef3c7, #fde68a);
+    backdrop-filter: blur(2px);
+  }
+
+  .platinum-card {
+    border: 1px solid rgba(100, 116, 139, 0.35);
+    background:
+      linear-gradient(135deg, rgba(248, 250, 252, 0.96), rgba(226, 232, 240, 0.92)),
+      repeating-linear-gradient(
+        120deg,
+        rgba(255, 255, 255, 0.28) 0px,
+        rgba(255, 255, 255, 0.28) 8px,
+        rgba(203, 213, 225, 0.22) 8px,
+        rgba(203, 213, 225, 0.22) 16px
+      );
+    position: relative;
+    overflow: hidden;
+  }
+
+  .platinum-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 15%, rgba(255, 255, 255, 0.45) 50%, transparent 85%);
+    transform: translateX(-120%);
+    transition: transform 0.7s ease;
+    pointer-events: none;
+  }
+
+  .platinum-card:hover::before {
+    transform: translateX(120%);
+  }
+}
+
+@layer utilities {
+  .font-heading {
+    font-family: "Cinzel", serif;
+  }
+}
+
+@keyframes fire {
+  0% { background: linear-gradient(45deg, #ff4500, #ff6600, #ff8800); }
+  25% { background: linear-gradient(45deg, #ff6600, #ff8800, #ffa500); }
+  50% { background: linear-gradient(45deg, #ff8800, #ffa500, #ffcc00); }
+  75% { background: linear-gradient(45deg, #ffa500, #ffcc00, #ff4500); }
+  100% { background: linear-gradient(45deg, #ffcc00, #ff4500, #ff6600); }
+}
+
+.fire-bg {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(185, 28, 28, 0.55), transparent 45%),
+    radial-gradient(circle at 80% 70%, rgba(212, 175, 55, 0.28), transparent 45%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(127, 29, 29, 0.45), rgba(8, 47, 73, 0.35));
+  background-size: cover;
+  background-position: center;
+  animation: fire 3s ease-in-out infinite;
+}
+
+@keyframes badgeMove {
+  0% { left: 1rem; top: 1rem; }
+  25% { left: calc(100% - 6rem); top: 1rem; }
+  50% { left: calc(100% - 6rem); top: calc(100% - 2rem); }
+  75% { left: 1rem; top: calc(100% - 2rem); }
+  100% { left: 1rem; top: 1rem; }
+}
+
+.animate-badgeMove {
+  animation: badgeMove 8s linear infinite;
+}
+
+.house-words span {
+  border: 1px solid color-mix(in srgb, var(--house-secondary) 60%, #ffffff 40%);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--house-primary) 25%, #020617 75%);
+  color: var(--house-secondary);
+  padding: 0.2rem 0.7rem;
+  animation: pulseWord 2.8s ease-in-out infinite;
+}
+
+.house-words span:nth-child(2) { animation-delay: 0.25s; }
+.house-words span:nth-child(3) { animation-delay: 0.5s; }
+.house-words span:nth-child(4) { animation-delay: 0.75s; }
+.house-words span:nth-child(5) { animation-delay: 1s; }
+
+@keyframes pulseWord {
+  0%, 100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+  50% {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px -10px color-mix(in srgb, var(--house-primary) 80%, black 20%);
+  }
+}

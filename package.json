@@ -9,7 +9,9 @@
     "seed": "npm run seed --prefix backend",
     "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
     "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
-    "start": "node backend/src/server.js"
+    "start": "node backend/src/server.js",
+    "portfolio": "npm run dev --prefix legacy_portfolio",
+    "build:portfolio": "npm run build --prefix legacy_portfolio"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
