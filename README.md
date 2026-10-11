@@ -1,21 +1,29 @@
-# 🏀 HoopScore — Live Basketball 3x3 Scoring & Match Management Web Application
+# 🏀 MITS Basketball Club — HoopScore
+### Official FIBA 3x3 & 5x5 Live Scoring & Tournament Management Platform
 
-> **Tagline:** Live Basketball 3x3 Scoring & Match Management  
-> **Standard:** Official FIBA 3x3 Rules (10:00 Stop-Clock, 12s Shot Clock, 21-Point Sudden Victory, 7-Foul Penalty, 10-Foul Double Penalty)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-mits--basketball--club.vercel.app-00dfa2?style=for-the-badge&logo=vercel&logoColor=black)](https://mits-basketball-club.vercel.app/)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sarthakjainbajaj-hash/Mits-basketball-club)
+[![Developer](https://img.shields.io/badge/Created%20By-Sarthak%20Jain%20Bajaj-orange?style=for-the-badge)](https://github.com/sarthakjainbajaj-hash)
+[![React](https://img.shields.io/badge/React%2018-Vite%20%7C%20Tailwind-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Node](https://img.shields.io/badge/Node.js-Express%20%7C%20Socket.IO-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Database](https://img.shields.io/badge/MongoDB-Atlas%20%7C%20Mongoose-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 
-HoopScore is a production-ready, full-stack web application designed for professional and collegiate 3x3 basketball tournaments. It features synchronized live scoreboards, drift-free timestamp-based game clocks, an independent 12-second shot clock, arena audio synthesizers, player box score attribution, live undos, tournament standings calculations, and dedicated spectator TV displays.
+> **Live Production URL:** 🔗 [https://mits-basketball-club.vercel.app/](https://mits-basketball-club.vercel.app/)  
+> **Official Sports Platform** for Madhav Institute of Technology & Science (MITS) Basketball Club.  
+> **Standards Supported:** FIBA 3x3 (10-min, 12s shot clock, 21-pt sudden death) & FIBA 5x5 Full Court (Quarter system, 24s shot clock, team fouls, overtime).
+
+HoopScore is an enterprise-grade sports management and live scoreboard system designed for collegiate tournaments, FIBA 3x3 half-court battles, and 5x5 full-court championships. It features synchronized live scoreboards, drift-free timestamp-based game clocks, configurable 1-min & 2-min timeout clocks, arena audio synthesizers, player box score attribution, live undos, tournament standings calculations, and dedicated spectator TV displays.
 
 ---
 
 ## 🌟 Key Features
 
-1. **Official FIBA 3x3 Match Engine**:
-   - **Real Game Clock (10:00)**: Timestamp-based countdown calculations (`remainingTime - (now - startedAt)`). Prevents drift and remains 100% accurate even if the browser tab sleeps or loses focus.
-   - **Independent 12-Second Shot Clock**: Complete with `RESET 12`, `RESET 2` (offensive rebound), pause, resume, and critical visual warning at $\le$ 3 seconds.
-   - **Sudden Victory Target Score (21 PTS)**: Match automatically ends when either team reaches 21 points, calculating the winner and triggering the arena horn.
-   - **Foul Penalty System**: Visual LED pip counters. Automatic **BONUS (2 Free Throws)** at 7 team fouls and **DOUBLE BONUS (2 Free Throws + Ball Possession)** at 10 fouls.
-   - **Possession Toggle**: Directional indicators (`← TEAM A` / `TEAM B →`) with event tracking.
-   - **Timeouts**: FIBA 3x3 standard 1 timeout per team per game with automatic clock stoppage and referee whistle audio.
+1. **Dual Match Engines (FIBA 3x3 & 5x5 Full Court)**:
+   - **FIBA 3x3 Mode**: 10:00 countdown clock, 12-second shot clock, 21-point sudden victory, 7-foul penalty (2 free throws), and 10-foul double penalty.
+   - **FIBA 5x5 Mode**: Multi-quarter stop clocks, 24-second shot clock, 5 team fouls bonus, minimum 6 player team rosters, and extended timeout allocations.
+   - **Drift-Free Precision Clocks**: Timestamp-based countdown calculations (`remainingTime - (now - startedAt)`). Zero drift even when devices sleep or tabs lose focus.
+   - **Configurable Timeout Clocks**: Dedicated 1-minute and 2-minute countdown clocks with referee whistle audio alerts.
+   - **Possession Toggle**: Directional indicators (`← TEAM A` / `TEAM B →`) with event logging.
 
 2. **Scorer & Spectator Real-Time Split (Socket.IO)**:
    - **Scorer Console (`/matches/:id/live`)**: Full control suite for scores (+1, +2, -1, -2), foul adjustments, clock toggles, and live box scores.
@@ -280,5 +288,16 @@ To experience the real-time WebSocket synchronization across devices:
 
 ---
 
+## 👨‍💻 Author & Credits
+
+Designed, architected, and built with ❤️ by **Sarthak Jain Bajaj**.
+
+- **GitHub**: [@sarthakjainbajaj-hash](https://github.com/sarthakjainbajaj-hash)
+- **Live Basketball Club**: [mits-basketball-club.vercel.app](https://mits-basketball-club.vercel.app/)
+- **College**: Madhav Institute of Technology & Science (MITS), Gwalior
+
+---
+
 ## 📜 License
-MIT License. Built for sports-tech tournaments and FIBA 3x3 organizers worldwide.
+MIT License. Built for MITS Basketball Club and sports tournaments worldwide.
+
