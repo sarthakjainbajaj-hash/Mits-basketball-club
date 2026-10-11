@@ -187,6 +187,39 @@ function Resume() {
                 </div>
 
                 <div className="rounded-xl border border-brand-800/40 bg-slate-900/60 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="text-base font-semibold text-slate-100">MITS Basketball Club — HoopScore</h5>
+                      <p className="text-xs text-brand-400 font-medium">Full-Stack Real-Time FIBA 3x3 & 5x5 Tournament & Scoring Platform</p>
+                    </div>
+                    <span className="rounded bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 text-[11px] font-bold text-emerald-400">
+                      Live
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-300">
+                    Engineered an official real-time basketball tournament management and scoreboard platform with sub-second WebSocket state synchronization, digital LED arena clock, 12s/24s shot clock, penalty tracking, career roster statistics, and printable summaries.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-4 text-xs font-semibold">
+                    <a
+                      href="https://mits-basketball-club.vercel.app/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-gold-400 hover:underline flex items-center gap-1"
+                    >
+                      Live Demo <FaExternalLinkAlt size={10} />
+                    </a>
+                    <a
+                      href="https://github.com/sarthakjainbajaj-hash/Mits-basketball-club"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-slate-300 hover:underline flex items-center gap-1"
+                    >
+                      <FaGithub size={12} /> GitHub Repository
+                    </a>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-brand-800/40 bg-slate-900/60 p-4">
                   <h5 className="text-base font-semibold text-slate-100">Parking Lot Management System</h5>
                   <p className="text-xs text-brand-400 font-medium">React, Flask</p>
                   <p className="mt-2 text-xs leading-relaxed text-slate-300">

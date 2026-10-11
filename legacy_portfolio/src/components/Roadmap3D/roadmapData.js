@@ -34,13 +34,13 @@ export const ROADMAP_STEPS = [
       "Comprehensive development toolkit spanning reactive frontend frameworks, custom WebGL graphics engines, and resilient backend systems. Built with clean modular architecture, optimal state management, and zero unnecessary bloat.",
     badges: [
       "React.js",
+      "Socket.io",
       "Three.js / WebGL",
       "Node.js",
       "Express.js",
       "Python",
       "MongoDB",
       "Tailwind CSS",
-      "C++",
       "Web Audio API",
     ],
     color: "#3b82f6",
@@ -48,10 +48,10 @@ export const ROADMAP_STEPS = [
     borderColor: "border-blue-500/50",
     glowColor: "rgba(59, 130, 246, 0.6)",
     speechText:
-      "Here at Step 2 is my technical arsenal. I craft reactive, fluid client interfaces in React and Three.js, backed by scalable backend services in Node.js, Express, and Python with MongoDB and MySQL databases.",
+      "Here at Step 2 is my technical arsenal. I craft reactive, fluid client interfaces in React and Three.js, backed by scalable backend services in Node.js, Express, and Python with MongoDB and real-time Socket.io state synchronization.",
     highlights: [
       "Frontend: React.js, Tailwind CSS, Vite, HTML5 Canvas",
-      "3D & Graphics: Three.js, WebGL Shaders, Procedural Physics & Audio",
+      "Real-Time & 3D: Socket.io, Three.js, WebGL Shaders, Procedural Audio",
       "Backend: Node.js, Express.js, Python, Flask, RESTful APIs",
       "Databases: MongoDB, Mongoose, MySQL, Database Indexing",
     ],

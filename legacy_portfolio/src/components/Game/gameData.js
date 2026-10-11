@@ -118,6 +118,29 @@ export const INTERACTABLES = [
 
   // Arcane Forge - Projects
   {
+    id: "proj_hoopscore",
+    name: "Pedestal: HoopScore",
+    title: "MITS Basketball Club Platform",
+    type: "shrine",
+    x: 900,
+    y: 220,
+    avatar: "🏀",
+    badge: "Live Tournament System",
+    icon: "🏆",
+    category: "project",
+    dialogue: {
+      headline: "MITS Basketball Club — HoopScore",
+      subtitle: "Tech Stack: React 18 • Node.js • Socket.io • MongoDB • Web Audio API",
+      body: [
+        "Official tournament management and live FIBA 3x3 & 5x5 scoring platform built for the MITS Basketball Club.",
+        "Sub-second WebSocket score synchronization, digital arena LED clock, 12s/24s shot clock, timeout timers, and foul penalties.",
+        "Player rosters, career stats, PDF match summaries, sound effects, and role-based access for Scorers and Admins.",
+      ],
+      liveUrl: "https://mits-basketball-club.vercel.app/",
+      githubUrl: "https://github.com/sarthakjainbajaj-hash/Mits-basketball-club",
+    },
+  },
+  {
     id: "proj_solvesphere",
     name: "Pedestal: SolveSphere",
     title: "AI-Powered Problem Solving Platform",

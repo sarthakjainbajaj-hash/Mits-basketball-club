@@ -39,6 +39,17 @@ export const projects = [
     githubUrl: "https://github.com/sarthakjainbajaj-hash/SolveSphere-SIH26043",
   },
   {
+    title: "MITS Basketball Club — HoopScore",
+    tag: "🏀 Live Sports Platform",
+    category: "Full-Stack Web App & Real-Time Engine",
+    description:
+      "Official live tournament management & FIBA 3x3 / 5x5 scoring system for MITS Basketball Club. Features sub-second WebSocket synchronization, digital stadium scoreboard, shot clock (12s/24s), penalty bonuses, player roster career stats, 1m/2m timeout clocks, and tournament bracket scheduling.",
+    metrics: "WebSocket Real-Time Sync • FIBA 3x3 & 5x5 Official Standards • Live on Vercel & Render",
+    techStack: ["React 18", "Tailwind CSS", "Node.js", "Express.js", "MongoDB", "Socket.io", "Web Audio API", "Vite"],
+    liveUrl: "https://mits-basketball-club.vercel.app/",
+    githubUrl: "https://github.com/sarthakjainbajaj-hash/Mits-basketball-club",
+  },
+  {
     title: "Parking Lot Management System",
     tag: "🚗 Automated Management",
     category: "Full-Stack Web Application",
