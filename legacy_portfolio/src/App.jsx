@@ -240,14 +240,6 @@ function App() {
 
       <Footer />
 
-      {/* Floating Action Button for 3D Roadmap */}
-      <button
-        type="button"
-        onClick={() => setViewMode("roadmap")}
-        className="fixed bottom-6 left-6 z-50 flex items-center gap-2 rounded-full border-2 border-cyan-400/80 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 px-5 py-3 text-xs font-black text-white shadow-2xl transition duration-300 hover:scale-110 hover:shadow-cyan-500/35"
-      >
-        <span>🗺️</span> 3D Career Roadmap
-      </button>
 
       {/* Floating Action Button for Fullscreen Game */}
       <button
