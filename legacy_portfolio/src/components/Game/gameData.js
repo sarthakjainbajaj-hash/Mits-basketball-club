@@ -136,7 +136,7 @@ export const INTERACTABLES = [
         "Sub-second WebSocket score synchronization, digital arena LED clock, 12s/24s shot clock, timeout timers, and foul penalties.",
         "Player rosters, career stats, PDF match summaries, sound effects, and role-based access for Scorers and Admins.",
       ],
-      liveUrl: "https://mits-basketball-club.vercel.app/",
+      liveUrl: "https://mits-basketball-club-git-main-sarthak-jain-bajajs-projects.vercel.app/dashboard",
       githubUrl: "https://github.com/sarthakjainbajaj-hash/Mits-basketball-club",
     },
   },

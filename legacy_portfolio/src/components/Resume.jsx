@@ -201,7 +201,7 @@ function Resume() {
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-4 text-xs font-semibold">
                     <a
-                      href="https://mits-basketball-club.vercel.app/"
+                      href="https://mits-basketball-club-git-main-sarthak-jain-bajajs-projects.vercel.app/dashboard"
                       target="_blank"
                       rel="noreferrer"
                       className="text-gold-400 hover:underline flex items-center gap-1"

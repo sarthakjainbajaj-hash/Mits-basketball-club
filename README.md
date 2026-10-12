@@ -1,14 +1,14 @@
 # 🏀 MITS Basketball Club — HoopScore
 ### Official FIBA 3x3 & 5x5 Live Scoring & Tournament Management Platform
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-mits--basketball--club.vercel.app-00dfa2?style=for-the-badge&logo=vercel&logoColor=black)](https://mits-basketball-club.vercel.app/)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel%20Dashboard-00dfa2?style=for-the-badge&logo=vercel&logoColor=black)](https://mits-basketball-club-git-main-sarthak-jain-bajajs-projects.vercel.app/dashboard)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sarthakjainbajaj-hash/Mits-basketball-club)
 [![Developer](https://img.shields.io/badge/Created%20By-Sarthak%20Jain%20Bajaj-orange?style=for-the-badge)](https://github.com/sarthakjainbajaj-hash)
 [![React](https://img.shields.io/badge/React%2018-Vite%20%7C%20Tailwind-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![Node](https://img.shields.io/badge/Node.js-Express%20%7C%20Socket.IO-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Database](https://img.shields.io/badge/MongoDB-Atlas%20%7C%20Mongoose-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 
-> **Live Production URL:** 🔗 [https://mits-basketball-club.vercel.app/](https://mits-basketball-club.vercel.app/)  
+> **Live Production URL:** 🔗 [https://mits-basketball-club-git-main-sarthak-jain-bajajs-projects.vercel.app/dashboard](https://mits-basketball-club-git-main-sarthak-jain-bajajs-projects.vercel.app/dashboard)  
 > **Official Sports Platform** for Madhav Institute of Technology & Science (MITS) Basketball Club.  
 > **Standards Supported:** FIBA 3x3 (10-min, 12s shot clock, 21-pt sudden death) & FIBA 5x5 Full Court (Quarter system, 24s shot clock, team fouls, overtime).
 
@@ -293,7 +293,7 @@ To experience the real-time WebSocket synchronization across devices:
 Designed, architected, and built with ❤️ by **Sarthak Jain Bajaj**.
 
 - **GitHub**: [@sarthakjainbajaj-hash](https://github.com/sarthakjainbajaj-hash)
-- **Live Basketball Club**: [mits-basketball-club.vercel.app](https://mits-basketball-club.vercel.app/)
+- **Live Basketball Club**: [mits-basketball-club-git-main-sarthak-jain-bajajs-projects.vercel.app/dashboard](https://mits-basketball-club-git-main-sarthak-jain-bajajs-projects.vercel.app/dashboard)
 - **College**: Madhav Institute of Technology & Science (MITS), Gwalior
 
 ---
