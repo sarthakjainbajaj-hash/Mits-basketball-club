@@ -3,7 +3,7 @@ import { FaBars, FaTimes } from "react-icons/fa";
 import { navLinks } from "../data";
 import ThemeToggle from "./ThemeToggle";
 
-function Navbar({ isDark, onToggle, houseTheme, onHouseChange, onPlayGame, onOpenRoadmap }) {
+function Navbar({ isDark, onToggle, houseTheme, onHouseChange, onPlayGame }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -14,15 +14,6 @@ function Navbar({ isDark, onToggle, houseTheme, onHouseChange, onPlayGame, onOpe
         </a>
 
         <div className="hidden items-center gap-4 lg:gap-5 md:flex">
-          {onOpenRoadmap && (
-            <button
-              type="button"
-              onClick={onOpenRoadmap}
-              className="flex items-center gap-1.5 rounded-full border border-cyan-400/60 bg-gradient-to-r from-cyan-600 to-blue-600 px-3.5 py-1.5 text-xs font-black text-white shadow-md hover:scale-105 transition duration-200"
-            >
-              <span>🗺️</span> 3D Roadmap
-            </button>
-          )}
           <button
             type="button"
             onClick={onPlayGame}
@@ -73,18 +64,6 @@ function Navbar({ isDark, onToggle, houseTheme, onHouseChange, onPlayGame, onOpe
       {isOpen && (
         <div id="mobile-menu" className="border-t border-brand-700/40 bg-slate-950/95 px-5 py-4 backdrop-blur-xl dark:border-gold-500/50 dark:bg-slate-950/95 md:hidden">
           <div className="flex flex-col gap-3">
-            {onOpenRoadmap && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOpen(false);
-                  onOpenRoadmap();
-                }}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm font-black text-white shadow"
-              >
-                <span>🗺️</span> 3D Career Roadmap
-              </button>
-            )}
             <button
               type="button"
               onClick={() => {

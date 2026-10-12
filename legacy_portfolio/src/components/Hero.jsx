@@ -2,7 +2,7 @@ import { useState } from "react";
 import ThreeHeroObject from "./ThreeHeroObject";
 import TiltCard from "./TiltCard";
 
-function Hero({ houseTheme = "stark", onPlayGame, onOpenRoadmap }) {
+function Hero({ houseTheme = "stark", onPlayGame }) {
   const [heroMode, setHeroMode] = useState("3d");
 
   return (
@@ -31,20 +31,11 @@ function Hero({ houseTheme = "stark", onPlayGame, onOpenRoadmap }) {
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              {onOpenRoadmap && (
-                <button
-                  type="button"
-                  onClick={onOpenRoadmap}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 px-5 py-3 text-xs sm:text-sm font-black text-white shadow-premium transition duration-200 hover:scale-105 hover:shadow-cyan-500/30"
-                >
-                  <span>🗺️</span> 3D Career Roadmap
-                </button>
-              )}
               <a
                 href="#projects"
                 className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-gold-600 px-5 py-3 text-xs sm:text-sm font-black text-white shadow-premium transition duration-200 hover:scale-105"
               >
-                <span>🚀</span> Explore SolveSphere
+                <span>🚀</span> Explore Projects
               </a>
               <a
                 href="#aivideo"

@@ -13,15 +13,14 @@ import AiVideoShowcase from "./components/AiVideoShowcase";
 import ThreeBackground from "./components/ThreeBackground";
 import ThreeGameView from "./components/Game3D/ThreeGameView";
 import RageRoomView from "./components/RageRoom3D/RageRoomView";
-import Roadmap3DView from "./components/Roadmap3D/Roadmap3DView";
 import GameSelectorModal from "./components/Game/GameSelectorModal";
 import EngineSpecsModal from "./components/Game/EngineSpecsModal";
 
 function App() {
   const [isDark, setIsDark] = useState(false);
   const [houseTheme, setHouseTheme] = useState("stark");
-  // Default to 3D Interactive Career Roadmap (inspired by Infotact)
-  const [viewMode, setViewMode] = useState("roadmap");
+  // Default to standard website view
+  const [viewMode, setViewMode] = useState("website");
   // Active 3D game: 'citadel' (RPG Realm) or 'rageroom' (Arcade Stress Buster)
   const [activeGame, setActiveGame] = useState("citadel");
   const [isGameSelectorOpen, setIsGameSelectorOpen] = useState(false);
@@ -57,20 +56,7 @@ function App() {
     document.documentElement.dataset.house = house;
   };
 
-  // 1. 3D INTERACTIVE CAREER ROADMAP (Inspired by Infotact Roadmap)
-  if (viewMode === "roadmap") {
-    return (
-      <Roadmap3DView
-        onSwitchView={(mode) => setViewMode(mode === "classic" ? "website" : mode)}
-        onOpenGame={(gameId) => {
-          setActiveGame(gameId === "rageroom" ? "rageroom" : "citadel");
-          setViewMode("game");
-        }}
-      />
-    );
-  }
-
-  // 2. FULLSCREEN IMMERSIVE 3D GAME VIEW
+  // 1. FULLSCREEN IMMERSIVE 3D GAME VIEW
   if (viewMode === "game") {
     return (
       <>
@@ -97,20 +83,11 @@ function App() {
           }}
           currentGame={activeGame}
         />
-
-        {/* Floating Quick Switcher to 3D Roadmap */}
-        <button
-          type="button"
-          onClick={() => setViewMode("roadmap")}
-          className="fixed top-4 left-4 z-50 flex items-center gap-2 rounded-full border border-cyan-500/60 bg-slate-900/90 backdrop-blur px-4 py-2 text-xs font-black text-cyan-300 shadow-xl hover:bg-cyan-950 transition hover:scale-105"
-        >
-          <span>🗺️</span> 3D Roadmap
-        </button>
       </>
     );
   }
 
-  // 3. WEBSITE VIEW (Contains embedded Playable Game Arena + full scrollable sections)
+  // 2. WEBSITE VIEW (Contains embedded Playable Game Arena + full scrollable sections)
   return (
     <div className="relative min-h-screen overflow-x-hidden">
       <div className="pointer-events-none absolute -left-24 top-24 h-64 w-64 rounded-full bg-brand-500/30 blur-3xl dark:bg-brand-500/35" />
@@ -124,14 +101,12 @@ function App() {
         houseTheme={houseTheme}
         onHouseChange={changeHouseTheme}
         onPlayGame={() => setViewMode("game")}
-        onOpenRoadmap={() => setViewMode("roadmap")}
       />
 
       <main className="relative z-10">
         <Hero
           houseTheme={houseTheme}
           onPlayGame={() => setViewMode("game")}
-          onOpenRoadmap={() => setViewMode("roadmap")}
         />
 
         {/* Embedded Playable Game Arena Section with Side-by-Side Selector */}
