@@ -205,6 +205,61 @@ const deleteTournament = async (req, res) => {
   }
 };
 
+// @desc    Add team(s) to tournament
+// @route   POST /api/tournaments/:id/teams
+// @access  Private/Admin or Scorer
+const addTeamToTournament = async (req, res) => {
+  try {
+    const { teamId, teamIds } = req.body;
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) return res.status(404).json({ success: false, message: 'Tournament not found' });
+
+    const toAdd = teamIds ? teamIds : teamId ? [teamId] : [];
+    if (toAdd.length === 0) {
+      return res.status(400).json({ success: false, message: 'Please specify teamId or teamIds to add' });
+    }
+
+    const currentTeamIds = (tournament.teams || []).map((t) => t.toString());
+    for (const tid of toAdd) {
+      if (!currentTeamIds.includes(tid.toString())) {
+        tournament.teams.push(tid);
+        currentTeamIds.push(tid.toString());
+      }
+    }
+
+    await tournament.save();
+    const populated = await Tournament.findById(tournament._id).populate(
+      'teams',
+      'name shortName logo primaryColor secondaryColor'
+    );
+    res.status(200).json({ success: true, data: populated, message: 'Team(s) added successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Remove team from tournament
+// @route   DELETE /api/tournaments/:id/teams/:teamId
+// @access  Private/Admin or Scorer
+const removeTeamFromTournament = async (req, res) => {
+  try {
+    const { id, teamId } = req.params;
+    const tournament = await Tournament.findById(id);
+    if (!tournament) return res.status(404).json({ success: false, message: 'Tournament not found' });
+
+    tournament.teams = (tournament.teams || []).filter((t) => t.toString() !== teamId.toString());
+    await tournament.save();
+
+    const populated = await Tournament.findById(tournament._id).populate(
+      'teams',
+      'name shortName logo primaryColor secondaryColor'
+    );
+    res.status(200).json({ success: true, data: populated, message: 'Team removed from tournament' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getTournaments,
   getTournamentById,
@@ -212,4 +267,6 @@ module.exports = {
   createTournament,
   updateTournament,
   deleteTournament,
+  addTeamToTournament,
+  removeTeamFromTournament,
 };

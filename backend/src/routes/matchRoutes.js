@@ -29,7 +29,7 @@ const { authorize } = require('../middleware/role');
 // Standard match CRUD
 router.route('/')
   .get(getMatches)
-  .post(protect, authorize('admin'), createMatch);
+  .post(protect, authorize('admin', 'scorer'), createMatch);
 
 router.get('/:id/summary', getMatchSummary);
 

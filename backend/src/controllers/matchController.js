@@ -129,30 +129,81 @@ const createMatch = async (req, res) => {
       });
     }
 
+    let finalAStarters = [...teamA_starters];
+    let finalASubs = [...teamA_substitutes];
+    let finalBStarters = [...teamB_starters];
+    let finalBSubs = [...teamB_substitutes];
+
+    const reqStarters = matchType === '3x3' ? 3 : 5;
+    const maxSubs = matchType === '3x3' ? 2 : 7;
+
+    // Auto-resolve rosters from team registered players if not explicitly passed (e.g. tournament match fixture)
+    if (finalAStarters.length === 0) {
+      let teamAPlayers = await Player.find({ teamId: teamA });
+      const minNeededA = reqStarters + 1;
+      if (teamAPlayers.length < minNeededA) {
+        const teamObj = await Team.findById(teamA);
+        const tName = teamObj ? teamObj.name : 'Team A';
+        const needed = minNeededA - teamAPlayers.length;
+        for (let i = 1; i <= needed; i++) {
+          const np = await Player.create({
+            teamId: teamA,
+            name: `${tName} Player ${teamAPlayers.length + 1}`,
+            jerseyNumber: teamAPlayers.length + 10,
+            position: 'Forward',
+          });
+          teamAPlayers.push(np);
+        }
+      }
+      finalAStarters = teamAPlayers.slice(0, reqStarters).map((p) => p._id);
+      finalASubs = teamAPlayers.slice(reqStarters, reqStarters + maxSubs).map((p) => p._id);
+    }
+
+    if (finalBStarters.length === 0) {
+      let teamBPlayers = await Player.find({ teamId: teamB });
+      const minNeededB = reqStarters + 1;
+      if (teamBPlayers.length < minNeededB) {
+        const teamObj = await Team.findById(teamB);
+        const tName = teamObj ? teamObj.name : 'Team B';
+        const needed = minNeededB - teamBPlayers.length;
+        for (let i = 1; i <= needed; i++) {
+          const np = await Player.create({
+            teamId: teamB,
+            name: `${tName} Player ${teamBPlayers.length + 1}`,
+            jerseyNumber: teamBPlayers.length + 10,
+            position: 'Forward',
+          });
+          teamBPlayers.push(np);
+        }
+      }
+      finalBStarters = teamBPlayers.slice(0, reqStarters).map((p) => p._id);
+      finalBSubs = teamBPlayers.slice(reqStarters, reqStarters + maxSubs).map((p) => p._id);
+    }
+
     // Official Roster Validation
     if (matchType === '3x3') {
-      if (teamA_starters.length !== 3 || teamA_substitutes.length < 1 || teamA_substitutes.length > 2) {
+      if (finalAStarters.length !== 3 || finalASubs.length < 1 || finalASubs.length > 2) {
         return res.status(400).json({
           success: false,
           message: '3x3 requires 3 starting players and 1 or 2 substitutes (minimum 4 players) for Team A.',
         });
       }
 
-      if (teamB_starters.length !== 3 || teamB_substitutes.length < 1 || teamB_substitutes.length > 2) {
+      if (finalBStarters.length !== 3 || finalBSubs.length < 1 || finalBSubs.length > 2) {
         return res.status(400).json({
           success: false,
           message: '3x3 requires 3 starting players and 1 or 2 substitutes (minimum 4 players) for Team B.',
         });
       }
     } else {
-      if (teamA_starters.length !== 5 || teamA_substitutes.length < 1 || teamA_substitutes.length > 7) {
+      if (finalAStarters.length !== 5 || finalASubs.length < 1 || finalASubs.length > 7) {
         return res.status(400).json({
           success: false,
           message: '5x5 requires 5 starting players and 1 to 7 substitutes (minimum 6 players) for Team A.',
         });
       }
 
-      if (teamB_starters.length !== 5 || teamB_substitutes.length < 1 || teamB_substitutes.length > 7) {
+      if (finalBStarters.length !== 5 || finalBSubs.length < 1 || finalBSubs.length > 7) {
         return res.status(400).json({
           success: false,
           message: '5x5 requires 5 starting players and 1 to 7 substitutes (minimum 6 players) for Team B.',
@@ -171,10 +222,10 @@ const createMatch = async (req, res) => {
       }));
     };
 
-    const formattedAStarters = await formatPlayerList(teamA_starters);
-    const formattedASubs = await formatPlayerList(teamA_substitutes);
-    const formattedBStarters = await formatPlayerList(teamB_starters);
-    const formattedBSubs = await formatPlayerList(teamB_substitutes);
+    const formattedAStarters = await formatPlayerList(finalAStarters);
+    const formattedASubs = await formatPlayerList(finalASubs);
+    const formattedBStarters = await formatPlayerList(finalBStarters);
+    const formattedBSubs = await formatPlayerList(finalBSubs);
 
     const allPlayersA = [...formattedAStarters, ...formattedASubs];
     const allPlayersB = [...formattedBStarters, ...formattedBSubs];
