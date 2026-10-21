@@ -36,7 +36,7 @@ router.get('/:id/summary', getMatchSummary);
 router.route('/:id')
   .get(getMatchById)
   .put(protect, authorize('admin', 'scorer'), updateMatch)
-  .delete(protect, authorize('admin'), deleteMatch);
+  .delete(protect, authorize('admin', 'scorer'), deleteMatch);
 
 // Live Match Scoring & Clock Controls (Scorer and Admin)
 router.post('/:id/start', protect, authorize('admin', 'scorer'), startMatch);

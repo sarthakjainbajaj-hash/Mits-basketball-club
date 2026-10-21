@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { matchApi } from '../api/matchApi';
 import {
   Trophy,
@@ -15,11 +16,14 @@ import {
   History,
   ArrowRightLeft,
   FastForward,
+  Trash2,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
 const MatchDetailsPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { isAdmin, isScorer } = useAuth();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -43,6 +47,26 @@ const MatchDetailsPage = () => {
   const handlePrint = () => {
     window.print();
   };
+
+  const handleDeleteMatch = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete match "${match.matchName}"? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await matchApi.delete(id);
+      setToast({ message: 'Match deleted successfully', type: 'success' });
+      setTimeout(() => {
+        navigate('/history');
+      }, 500);
+    } catch (err) {
+      setToast({ message: 'Failed to delete match: ' + err.message, type: 'error' });
+    }
+  };
+
 
   if (loading) {
     return (
@@ -80,13 +104,26 @@ const MatchDetailsPage = () => {
           <ArrowLeft className="w-4 h-4" /> Back to Match Archives
         </Link>
 
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 shadow-md transition-all active:scale-95"
-        >
-          <Printer className="w-4 h-4 text-orange-400" />
-          <span>Download Match Report (PDF)</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {(isAdmin || isScorer) && (
+            <button
+              onClick={handleDeleteMatch}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-red-300 font-bold text-xs border border-red-800/60 shadow-md transition-all active:scale-95"
+              title="Delete Match"
+            >
+              <Trash2 className="w-4 h-4 text-red-400" />
+              <span>Delete Match</span>
+            </button>
+          )}
+
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 shadow-md transition-all active:scale-95"
+          >
+            <Printer className="w-4 h-4 text-orange-400" />
+            <span>Download Match Report (PDF)</span>
+          </button>
+        </div>
       </div>
 
       {/* Official Match Banner */}

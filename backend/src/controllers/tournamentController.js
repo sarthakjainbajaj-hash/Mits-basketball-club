@@ -184,12 +184,18 @@ const updateTournament = async (req, res) => {
 
 // @desc    Delete tournament
 // @route   DELETE /api/tournaments/:id
-// @access  Private/Admin
+// @access  Private/Admin or Scorer
 const deleteTournament = async (req, res) => {
   try {
     const tournament = await Tournament.findById(req.params.id);
     if (!tournament) {
       return res.status(404).json({ success: false, message: 'Tournament not found' });
+    }
+
+    // Unlink tournament from any matches so matches continue to exist safely
+    const Match = require('../models/Match');
+    if (Match) {
+      await Match.updateMany({ tournamentId: tournament._id }, { $set: { tournamentId: null } });
     }
 
     await tournament.deleteOne();

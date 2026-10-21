@@ -12,11 +12,12 @@ import {
   ArrowRight,
   X,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
 const TournamentsPage = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isScorer } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +97,23 @@ const TournamentsPage = () => {
     }
   };
 
+  const handleDeleteTournament = async (id, name) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete tournament "${name}"? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await tournamentApi.delete(id);
+      setToast({ message: `Tournament "${name}" deleted successfully`, type: 'success' });
+      fetchTournaments();
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to delete tournament', type: 'error' });
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Top Header */}
@@ -133,17 +151,32 @@ const TournamentsPage = () => {
             >
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <span
-                    className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full border ${
-                      t.status === 'ONGOING'
-                        ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
-                        : t.status === 'COMPLETED'
-                        ? 'bg-slate-800 text-slate-400 border-slate-700'
-                        : 'bg-amber-950/60 text-amber-400 border-amber-800'
-                    }`}
-                  >
-                    {t.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full border ${
+                        t.status === 'ONGOING'
+                          ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
+                          : t.status === 'COMPLETED'
+                          ? 'bg-slate-800 text-slate-400 border-slate-700'
+                          : 'bg-amber-950/60 text-amber-400 border-amber-800'
+                      }`}
+                    >
+                      {t.status}
+                    </span>
+                    {(isAdmin || isScorer) && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteTournament(t._id, t.name);
+                        }}
+                        className="p-1 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/50 transition-colors"
+                        title="Delete Tournament"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                   <span className="text-xs text-slate-400 font-mono flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
                     {new Date(t.startDate).toLocaleDateString()}

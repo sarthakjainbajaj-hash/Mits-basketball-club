@@ -250,7 +250,7 @@ const updateTeam = async (req, res) => {
 
 // @desc    Delete team
 // @route   DELETE /api/teams/:id
-// @access  Private/Admin
+// @access  Private/Admin or Scorer
 const deleteTeam = async (req, res) => {
   try {
     const team = await Team.findById(req.params.id);
@@ -260,6 +260,25 @@ const deleteTeam = async (req, res) => {
 
     // Unassign or delete players belonging to this team
     await Player.deleteMany({ teamId: team._id });
+
+    // Clean up tournament team lists
+    const Tournament = require('../models/Tournament');
+    if (Tournament) {
+      await Tournament.updateMany({ teams: team._id }, { $pull: { teams: team._id } });
+    }
+
+    // Clean up matches and events involving this team
+    const Match = require('../models/Match');
+    const MatchEvent = require('../models/MatchEvent');
+    if (Match) {
+      const associatedMatches = await Match.find({ $or: [{ teamA: team._id }, { teamB: team._id }] });
+      const matchIds = associatedMatches.map((m) => m._id);
+      if (MatchEvent && matchIds.length > 0) {
+        await MatchEvent.deleteMany({ matchId: { $in: matchIds } });
+      }
+      await Match.deleteMany({ _id: { $in: matchIds } });
+    }
+
     await team.deleteOne();
 
     res.status(200).json({ success: true, message: 'Team and associated players deleted' });

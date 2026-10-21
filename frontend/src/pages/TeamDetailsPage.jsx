@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { teamApi } from '../api/teamApi';
 import { playerApi } from '../api/playerApi';
@@ -20,7 +20,8 @@ import Toast from '../components/Common/Toast';
 
 const TeamDetailsPage = () => {
   const { id } = useParams();
-  const { isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const { isAdmin, isScorer } = useAuth();
   const [team, setTeam] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -119,6 +120,25 @@ const TeamDetailsPage = () => {
     }
   };
 
+  const handleDeleteTeam = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${team.name}"? This will permanently delete the team, its player rosters, and associated records.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await teamApi.delete(id);
+      setToast({ message: `Team "${team.name}" deleted successfully`, type: 'success' });
+      setTimeout(() => {
+        navigate('/teams');
+      }, 500);
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to delete team', type: 'error' });
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-24 flex justify-center">
@@ -151,13 +171,26 @@ const TeamDetailsPage = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Back Link */}
-      <Link
-        to="/teams"
-        className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-400 hover:text-white transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Teams Directory
-      </Link>
+      {/* Back Link & Admin Actions */}
+      <div className="flex items-center justify-between">
+        <Link
+          to="/teams"
+          className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Teams Directory
+        </Link>
+
+        {(isAdmin || isScorer) && (
+          <button
+            onClick={handleDeleteTeam}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-white font-bold text-xs border border-red-800/60 shadow transition-all active:scale-95"
+            title="Delete Team"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete Team</span>
+          </button>
+        )}
+      </div>
 
       {/* Team Hero Header */}
       <div

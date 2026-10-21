@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -51,6 +52,19 @@ const DashboardPage = () => {
       setToast({ message: 'Error loading dashboard data: ' + err.message, type: 'error' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteMatch = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete match "${name || 'this match'}"?`)) {
+      return;
+    }
+    try {
+      await matchApi.delete(id);
+      setToast({ message: 'Match deleted successfully', type: 'success' });
+      fetchDashboardData();
+    } catch (err) {
+      setToast({ message: 'Failed to delete match: ' + err.message, type: 'error' });
     }
   };
 
@@ -244,7 +258,22 @@ const DashboardPage = () => {
                 >
                   <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5 font-mono">
                     <span>{m.tournamentId?.name || 'Exhibition 3x3'}</span>
-                    <span>{new Date(m.scheduledDate).toLocaleDateString()}</span>
+                    <div className="flex items-center gap-2">
+                      <span>{new Date(m.scheduledDate).toLocaleDateString()}</span>
+                      {isScorer && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteMatch(m._id, `${m.teamA?.name} vs ${m.teamB?.name}`);
+                          }}
+                          title="Delete Match"
+                          className="p-1 rounded text-red-400 hover:text-white hover:bg-red-900/60 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -316,14 +345,25 @@ const DashboardPage = () => {
                     <div className="text-xs text-slate-500">{m.venue || 'Center Court'}</div>
                   </div>
 
-                  {isScorer && (
-                    <Link
-                      to={`/matches/${m._id}/setup`}
-                      className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-md"
-                    >
-                      Stage & Start
-                    </Link>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isScorer && (
+                      <button
+                        onClick={() => handleDeleteMatch(m._id, `${m.teamA?.name} vs ${m.teamB?.name}`)}
+                        title="Delete Match"
+                        className="p-2 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-800/60 text-red-400 hover:text-red-200 transition-all active:scale-95"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {isScorer && (
+                      <Link
+                        to={`/matches/${m._id}/setup`}
+                        className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-md"
+                      >
+                        Stage & Start
+                      </Link>
+                    )}
+                  </div>
                 </div>
               ))
             ) : (

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { tournamentApi } from '../api/tournamentApi';
+import { matchApi } from '../api/matchApi';
 import {
   Trophy,
   Calendar,
@@ -10,11 +12,14 @@ import {
   PlayCircle,
   ExternalLink,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
 const TournamentDetailsPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { isAdmin, isScorer } = useAuth();
   const [tournament, setTournament] = useState(null);
   const [standings, setStandings] = useState([]);
   const [activeTab, setActiveTab] = useState('standings'); // 'standings' | 'matches' | 'teams'
@@ -40,6 +45,39 @@ const TournamentDetailsPage = () => {
       setLoading(false);
     }
   };
+
+  const handleDeleteTournament = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete tournament "${tournament.name}"? Matches in this tournament will be preserved but unlinked.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await tournamentApi.delete(id);
+      setToast({ message: `Tournament "${tournament.name}" deleted successfully`, type: 'success' });
+      setTimeout(() => {
+        navigate('/tournaments');
+      }, 500);
+    } catch (err) {
+      setToast({ message: 'Failed to delete tournament: ' + err.message, type: 'error' });
+    }
+  };
+
+  const handleDeleteMatch = async (matchId, matchName) => {
+    if (!window.confirm(`Are you sure you want to permanently delete match "${matchName}"?`)) {
+      return;
+    }
+    try {
+      await matchApi.delete(matchId);
+      setToast({ message: 'Match deleted successfully', type: 'success' });
+      fetchTournamentData();
+    } catch (err) {
+      setToast({ message: 'Failed to delete match: ' + err.message, type: 'error' });
+    }
+  };
+
 
   if (loading) {
     return (
@@ -67,13 +105,26 @@ const TournamentDetailsPage = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Back Link */}
-      <Link
-        to="/tournaments"
-        className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-400 hover:text-white transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Tournaments
-      </Link>
+      {/* Back Link & Admin Actions */}
+      <div className="flex items-center justify-between">
+        <Link
+          to="/tournaments"
+          className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Tournaments
+        </Link>
+
+        {(isAdmin || isScorer) && (
+          <button
+            onClick={handleDeleteTournament}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-white font-bold text-xs border border-red-800/60 shadow transition-all active:scale-95"
+            title="Delete Tournament"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete Tournament</span>
+          </button>
+        )}
+      </div>
 
       {/* Tournament Header */}
       <div className="p-6 sm:p-10 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl relative overflow-hidden">
@@ -272,6 +323,15 @@ const TournamentDetailsPage = () => {
                   </div>
 
                   <div className="flex items-center justify-end gap-2 mt-4 pt-2">
+                    {(isAdmin || isScorer) && (
+                      <button
+                        onClick={() => handleDeleteMatch(m._id, m.matchName)}
+                        title="Delete Match"
+                        className="p-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 border border-red-800/60 text-red-400 hover:text-red-200 text-xs font-mono transition-all active:scale-95"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {m.status === 'COMPLETED' ? (
                       <Link
                         to={`/matches/${m._id}`}

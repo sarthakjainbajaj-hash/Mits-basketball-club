@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { matchApi } from '../api/matchApi';
 import { teamApi } from '../api/teamApi';
 import { tournamentApi } from '../api/tournamentApi';
@@ -13,10 +14,12 @@ import {
   Sparkles,
   ExternalLink,
   Flame,
+  Trash2,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
 const MatchHistoryPage = () => {
+  const { isAdmin, isScorer } = useAuth();
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
   const [tournaments, setTournaments] = useState([]);
@@ -71,6 +74,20 @@ const MatchHistoryPage = () => {
     e.preventDefault();
     fetchMatches();
   };
+
+  const handleDeleteMatch = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to permanently delete match "${name}"?`)) {
+      return;
+    }
+    try {
+      await matchApi.delete(id);
+      setToast({ message: 'Match deleted successfully', type: 'success' });
+      fetchMatches();
+    } catch (err) {
+      setToast({ message: 'Failed to delete match: ' + err.message, type: 'error' });
+    }
+  };
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -301,11 +318,20 @@ const MatchHistoryPage = () => {
                 <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-end gap-2">
                   <Link
                     to={`/matches/${m._id}`}
-                    className="w-full py-2 rounded-xl bg-slate-800 hover:bg-orange-600 text-slate-300 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-all"
+                    className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-orange-600 text-slate-300 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-all"
                   >
                     <span>{isCompleted ? 'View Official Box Score' : 'Match Staging / Preview'}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Link>
+                  {(isAdmin || isScorer) && (
+                    <button
+                      onClick={() => handleDeleteMatch(m._id, m.matchName)}
+                      title="Delete Match"
+                      className="p-2 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-800/60 text-red-400 hover:text-red-200 transition-all active:scale-95"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

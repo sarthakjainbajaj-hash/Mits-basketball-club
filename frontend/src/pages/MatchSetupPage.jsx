@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { matchApi } from '../api/matchApi';
 import {
   Shield,
@@ -14,12 +15,14 @@ import {
   Flame,
   Award,
   Zap,
+  Trash2,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
 const MatchSetupPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin, isScorer } = useAuth();
 
   const [match, setMatch] = useState(null);
   const [initialPossession, setInitialPossession] = useState('A');
@@ -63,6 +66,25 @@ const MatchSetupPage = () => {
     }
   };
 
+  const handleDeleteMatch = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete match "${match.matchName}"? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await matchApi.delete(id);
+      setToast({ message: 'Match deleted successfully', type: 'success' });
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 500);
+    } catch (err) {
+      setToast({ message: 'Failed to delete match: ' + err.message, type: 'error' });
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-24 flex justify-center">
@@ -90,12 +112,26 @@ const MatchSetupPage = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      <Link
-        to="/dashboard"
-        className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-400 hover:text-white transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-      </Link>
+      {/* Back Link & Delete Match */}
+      <div className="flex items-center justify-between">
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+        </Link>
+
+        {(isAdmin || isScorer) && (
+          <button
+            onClick={handleDeleteMatch}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-white font-bold text-xs border border-red-800/60 shadow transition-all active:scale-95"
+            title="Delete Match"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete Match</span>
+          </button>
+        )}
+      </div>
 
       {/* Header Banner */}
       <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl relative overflow-hidden">

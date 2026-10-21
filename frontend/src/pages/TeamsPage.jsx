@@ -16,7 +16,7 @@ import {
 import Toast from '../components/Common/Toast';
 
 const TeamsPage = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isScorer } = useAuth();
   const [teams, setTeams] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -395,21 +395,21 @@ const TeamsPage = () => {
                     </div>
                   </div>
 
-                  {isAdmin && (
-                    <div className="flex items-center gap-1">
+                  {(isAdmin || isScorer) && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                       <button
                         onClick={() => openEditModal(t)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                         title="Edit Team"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(t._id, t.name)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/30 transition-colors"
+                        className="p-1.5 rounded-lg text-red-400 hover:text-white hover:bg-red-600/80 transition-colors"
                         title="Delete Team"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   )}

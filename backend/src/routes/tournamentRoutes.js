@@ -19,7 +19,7 @@ router.get('/:id/standings', getTournamentStandings);
 
 router.route('/:id')
   .get(getTournamentById)
-  .put(protect, authorize('admin'), updateTournament)
-  .delete(protect, authorize('admin'), deleteTournament);
+  .put(protect, authorize('admin', 'scorer'), updateTournament)
+  .delete(protect, authorize('admin', 'scorer'), deleteTournament);
 
 module.exports = router;
