@@ -124,18 +124,18 @@ const LiveScoreboardPage = () => {
     if (!prev) return incoming ? { ...incoming, ...extra } : null;
     if (!incoming) return { ...prev, ...extra };
 
-    // If timer is running locally and also running in incoming update, DO NOT clobber running timer references
-    const isTimerActive = prev.timerRunning && incoming.timerRunning;
+    // If timer is running locally and not explicitly paused in extra, DO NOT clobber running timer references
+    const isTimerActive = Boolean(prev.timerRunning && extra.timerRunning !== false);
 
     return {
       ...prev,
       ...incoming,
       remainingTime: isTimerActive ? prev.remainingTime : (incoming.remainingTime ?? prev.remainingTime),
-      timerRunning: incoming.timerRunning !== undefined ? incoming.timerRunning : prev.timerRunning,
+      timerRunning: extra.timerRunning !== undefined ? extra.timerRunning : (isTimerActive ? true : incoming.timerRunning ?? prev.timerRunning),
       timerStartedAt: isTimerActive ? prev.timerStartedAt : (incoming.timerStartedAt ?? prev.timerStartedAt),
       serverTime: isTimerActive ? prev.serverTime : (incoming.serverTime ?? prev.serverTime),
       shotClockRemaining: isTimerActive ? prev.shotClockRemaining : (incoming.shotClockRemaining ?? prev.shotClockRemaining),
-      shotClockRunning: incoming.shotClockRunning !== undefined ? incoming.shotClockRunning : prev.shotClockRunning,
+      shotClockRunning: extra.shotClockRunning !== undefined ? extra.shotClockRunning : (isTimerActive ? prev.shotClockRunning : incoming.shotClockRunning ?? prev.shotClockRunning),
       shotClockStartedAt: isTimerActive ? prev.shotClockStartedAt : (incoming.shotClockStartedAt ?? prev.shotClockStartedAt),
       teamA: (incoming.teamA && typeof incoming.teamA === 'object' && incoming.teamA.name)
         ? incoming.teamA
@@ -288,25 +288,22 @@ const LiveScoreboardPage = () => {
     const now = Date.now();
     playClick();
 
-    let calculatedRemainingTime = match?.remainingTime || 0;
-    let calculatedScRemaining = match?.shotClockRemaining || 0;
+    // Compute remaining times accurately BEFORE updating state or firing API
+    let newRemainingTime = match?.remainingTime || 0;
+    if (match?.timerRunning && match?.timerStartedAt) {
+      const elapsed = (now - match.timerStartedAt) / 1000;
+      newRemainingTime = Math.max(0, Math.round((match.remainingTime - elapsed) * 10) / 10);
+    }
+
+    let newScRemaining = match?.shotClockRemaining || 0;
+    if (match?.shotClockRunning && match?.shotClockStartedAt) {
+      const scElapsed = (now - match.shotClockStartedAt) / 1000;
+      newScRemaining = Math.max(0, Math.round((match.shotClockRemaining - scElapsed) * 10) / 10);
+    }
 
     // 0ms Optimistic Update
     setMatch((prev) => {
       if (!prev) return prev;
-      let newRemainingTime = prev.remainingTime;
-      if (prev.timerRunning && prev.timerStartedAt) {
-        const elapsed = (now - prev.timerStartedAt) / 1000;
-        newRemainingTime = Math.max(0, Math.round((prev.remainingTime - elapsed) * 10) / 10);
-      }
-      let newScRemaining = prev.shotClockRemaining;
-      if (prev.shotClockRunning && prev.shotClockStartedAt) {
-        const scElapsed = (now - prev.shotClockStartedAt) / 1000;
-        newScRemaining = Math.max(0, Math.round((prev.shotClockRemaining - scElapsed) * 10) / 10);
-      }
-      calculatedRemainingTime = newRemainingTime;
-      calculatedScRemaining = newScRemaining;
-
       return {
         ...prev,
         status: prev.status === 'LIVE' ? 'PAUSED' : prev.status,
@@ -322,17 +319,17 @@ const LiveScoreboardPage = () => {
 
     try {
       const res = await matchApi.pause(id, {
-        remainingTime: calculatedRemainingTime,
-        shotClockRemaining: calculatedScRemaining,
+        remainingTime: newRemainingTime,
+        shotClockRemaining: newScRemaining,
       });
       if (res?.data) {
         setMatch((prev) => mergeMatchState(prev, res.data, {
           timerRunning: false,
           timerStartedAt: null,
-          remainingTime: calculatedRemainingTime,
+          remainingTime: newRemainingTime,
           shotClockRunning: false,
           shotClockStartedAt: null,
-          shotClockRemaining: calculatedScRemaining,
+          shotClockRemaining: newScRemaining,
         }));
       }
     } catch (err) {
@@ -525,7 +522,21 @@ const LiveScoreboardPage = () => {
 
     try {
       const res = await matchApi.recordFoul(id, { team, change });
-      if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
+      if (res?.data) {
+        setMatch((prev) => {
+          if (!prev) return res.data;
+          const keepTimer = Boolean(prev.timerRunning && prev.timerStartedAt);
+          return mergeMatchState(prev, res.data, {
+            timerRunning: keepTimer ? prev.timerRunning : res.data.timerRunning,
+            timerStartedAt: keepTimer ? prev.timerStartedAt : res.data.timerStartedAt,
+            remainingTime: keepTimer ? prev.remainingTime : res.data.remainingTime,
+            serverTime: keepTimer ? prev.serverTime : res.data.serverTime,
+            shotClockRunning: keepTimer ? prev.shotClockRunning : res.data.shotClockRunning,
+            shotClockStartedAt: keepTimer ? prev.shotClockStartedAt : res.data.shotClockStartedAt,
+            shotClockRemaining: keepTimer ? prev.shotClockRemaining : res.data.shotClockRemaining,
+          });
+        });
+      }
     } catch (err) {
       setToast({ message: err.message || 'Failed to update foul', type: 'error' });
       fetchMatch();
@@ -559,25 +570,22 @@ const LiveScoreboardPage = () => {
     const now = Date.now();
     playWhistle();
 
-    let calculatedRemainingTime = match?.remainingTime || 0;
-    let calculatedScRemaining = match?.shotClockRemaining || 0;
+    // Compute remaining times accurately BEFORE updating state or firing API
+    let newRemainingTime = match?.remainingTime || 0;
+    if (match?.timerRunning && match?.timerStartedAt) {
+      const elapsed = (now - match.timerStartedAt) / 1000;
+      newRemainingTime = Math.max(0, Math.round((match.remainingTime - elapsed) * 10) / 10);
+    }
+
+    let newScRemaining = match?.shotClockRemaining || 0;
+    if (match?.shotClockRunning && match?.shotClockStartedAt) {
+      const scElapsed = (now - match.shotClockStartedAt) / 1000;
+      newScRemaining = Math.max(0, Math.round((match.shotClockRemaining - scElapsed) * 10) / 10);
+    }
 
     // 0ms Optimistic Update
     setMatch((prev) => {
       if (!prev) return prev;
-      let newRemainingTime = prev.remainingTime;
-      if (prev.timerRunning && prev.timerStartedAt) {
-        const elapsed = (now - prev.timerStartedAt) / 1000;
-        newRemainingTime = Math.max(0, Math.round((prev.remainingTime - elapsed) * 10) / 10);
-      }
-      let newScRemaining = prev.shotClockRemaining;
-      if (prev.shotClockRunning && prev.shotClockStartedAt) {
-        const scElapsed = (now - prev.shotClockStartedAt) / 1000;
-        newScRemaining = Math.max(0, Math.round((prev.shotClockRemaining - scElapsed) * 10) / 10);
-      }
-      calculatedRemainingTime = newRemainingTime;
-      calculatedScRemaining = newScRemaining;
-
       return {
         ...prev,
         status: prev.status === 'LIVE' ? 'PAUSED' : prev.status,
@@ -609,18 +617,18 @@ const LiveScoreboardPage = () => {
     try {
       const res = await matchApi.callTimeout(id, {
         team,
-        remainingTime: calculatedRemainingTime,
-        shotClockRemaining: calculatedScRemaining,
+        remainingTime: newRemainingTime,
+        shotClockRemaining: newScRemaining,
         timeoutDuration,
       });
       if (res?.data) {
         setMatch((prev) => mergeMatchState(prev, res.data, {
           timerRunning: false,
           timerStartedAt: null,
-          remainingTime: calculatedRemainingTime,
+          remainingTime: newRemainingTime,
           shotClockRunning: false,
           shotClockStartedAt: null,
-          shotClockRemaining: calculatedScRemaining,
+          shotClockRemaining: newScRemaining,
         }));
       }
     } catch (err) {

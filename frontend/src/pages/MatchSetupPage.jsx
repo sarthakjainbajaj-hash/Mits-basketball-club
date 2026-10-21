@@ -26,6 +26,7 @@ const MatchSetupPage = () => {
 
   const [match, setMatch] = useState(null);
   const [initialPossession, setInitialPossession] = useState('A');
+  const [timeoutDuration, setTimeoutDuration] = useState(60);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
@@ -42,6 +43,9 @@ const MatchSetupPage = () => {
       if (matchData?.possession) {
         setInitialPossession(matchData.possession);
       }
+      if (matchData?.timeoutDuration || matchData?.settings?.timeoutDuration) {
+        setTimeoutDuration(matchData.timeoutDuration || matchData.settings?.timeoutDuration || 60);
+      }
     } catch (err) {
       setToast({ message: 'Error loading match setup: ' + err.message, type: 'error' });
     } finally {
@@ -49,10 +53,32 @@ const MatchSetupPage = () => {
     }
   };
 
+  const handleSelectTimeoutDuration = async (seconds) => {
+    setTimeoutDuration(seconds);
+    try {
+      await matchApi.update(id, {
+        timeoutDuration: seconds,
+        'settings.timeoutDuration': seconds,
+      });
+      setToast({
+        message: `Timeout clock set to ${seconds >= 60 ? `${Math.floor(seconds / 60)} Min` : `${seconds}s`}`,
+        type: 'success',
+      });
+    } catch (err) {
+      console.error('Failed to update timeout duration:', err);
+    }
+  };
+
   const handleLaunchMatch = async () => {
     try {
       // Update possession first
       await matchApi.togglePossession(match._id, initialPossession);
+
+      // Persist chosen timeout duration
+      await matchApi.update(match._id, {
+        timeoutDuration,
+        'settings.timeoutDuration': timeoutDuration,
+      });
 
       // Start the match timer & status
       await matchApi.start(match._id);
@@ -235,6 +261,66 @@ const MatchSetupPage = () => {
             {initialPossession === 'B' && (
               <CheckCircle2 className="w-6 h-6 text-cyan-400" />
             )}
+          </button>
+        </div>
+      </div>
+
+      {/* Pre-Match Timeout Clock Setting (1 Min or 2 Min) */}
+      <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-cyan-400" />
+            <h2 className="font-bold text-white text-base">Timeout Clock Duration</h2>
+          </div>
+          <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30">
+            Selected: {timeoutDuration === 120 ? '2 Minutes' : '1 Minute'}
+          </span>
+        </div>
+        <p className="text-xs text-slate-400">
+          Match shuru hone se pehle select karein ki team timeout lene par kitne minute ki clock chalegi (1 Min or 2 Min).
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+          <button
+            type="button"
+            onClick={() => handleSelectTimeoutDuration(60)}
+            className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
+              timeoutDuration === 60
+                ? 'border-orange-500 bg-orange-500/15 ring-2 ring-orange-500/30 shadow-lg'
+                : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+            }`}
+          >
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-digital text-xl font-black text-amber-400">01:00</span>
+                <span className="font-bold text-white text-sm">1 Minute (Standard)</span>
+              </div>
+              <p className="text-[11px] font-mono text-slate-400 mt-1">
+                Official FIBA 3x3 standard 60-second team timeout
+              </p>
+            </div>
+            {timeoutDuration === 60 && <CheckCircle2 className="w-5 h-5 text-orange-400" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectTimeoutDuration(120)}
+            className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
+              timeoutDuration === 120
+                ? 'border-orange-500 bg-orange-500/15 ring-2 ring-orange-500/30 shadow-lg'
+                : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+            }`}
+          >
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-digital text-xl font-black text-amber-400">02:00</span>
+                <span className="font-bold text-white text-sm">2 Minutes (Full Timeout)</span>
+              </div>
+              <p className="text-[11px] font-mono text-slate-400 mt-1">
+                Extended 120-second team strategy & hydration break
+              </p>
+            </div>
+            {timeoutDuration === 120 && <CheckCircle2 className="w-5 h-5 text-orange-400" />}
           </button>
         </div>
       </div>

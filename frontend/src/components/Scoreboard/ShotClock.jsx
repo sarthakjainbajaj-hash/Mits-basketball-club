@@ -30,17 +30,34 @@ const ShotClock = ({
     }
   }, [shotClockRemaining, shotClockStartedAt]);
 
+  const localReceivedAtRef = useRef(Date.now());
+  const lastStartedAtRef = useRef(shotClockStartedAt);
+
+  useEffect(() => {
+    if (shotClockStartedAt !== lastStartedAtRef.current) {
+      lastStartedAtRef.current = shotClockStartedAt;
+      localReceivedAtRef.current = Date.now();
+    }
+  }, [shotClockStartedAt]);
+
   useEffect(() => {
     let animationFrameId;
 
-    // Clock skew compensation between client device Date.now() and server's timestamp
-    const clientNowAtReceive = Date.now();
-    const clockOffset = serverTime ? clientNowAtReceive - serverTime : 0;
-
     const updateClock = () => {
       if (shotClockRunning && shotClockStartedAt) {
-        const adjustedNow = Date.now() - clockOffset;
-        const elapsed = (adjustedNow - shotClockStartedAt) / 1000;
+        let elapsed = 0;
+        const now = Date.now();
+
+        // If local client started shot clock or client clock aligns with shotClockStartedAt
+        if (!serverTime || Math.abs(now - shotClockStartedAt) < 1800000) {
+          elapsed = Math.max(0, (now - shotClockStartedAt) / 1000);
+        } else {
+          // Remote spectator client synchronization
+          const serverBaseElapsed = (serverTime > shotClockStartedAt) ? (serverTime - shotClockStartedAt) / 1000 : 0;
+          const additionalClientElapsed = Math.max(0, (now - localReceivedAtRef.current) / 1000);
+          elapsed = serverBaseElapsed + additionalClientElapsed;
+        }
+
         const currentRemaining = Math.max(0, shotClockRemaining - elapsed);
         setDisplaySecs(currentRemaining);
 
@@ -63,7 +80,7 @@ const ShotClock = ({
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, [shotClockRemaining, shotClockRunning, shotClockStartedAt, serverTime]);
+  }, [shotClockRemaining, shotClockRunning, shotClockStartedAt]);
 
   const roundedSeconds = Math.max(0, Math.ceil(displaySecs));
   const isWarning = roundedSeconds <= (matchType === '5x5' ? 5 : 3) && roundedSeconds > 0;

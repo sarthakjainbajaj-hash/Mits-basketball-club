@@ -245,27 +245,43 @@ const TeamScoreCard = ({
                 </div>
               ) : (
                 isScorer && onCallTimeout && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => onCallTimeout(team)}
                       disabled={timeouts <= 0}
-                      className="px-2 py-0.5 rounded bg-amber-950/70 hover:bg-amber-900/90 text-[11px] font-bold text-amber-300 disabled:opacity-30 border border-amber-700/80 transition-colors shadow-sm"
-                      title={`Call Timeout (${timeoutDuration === 120 ? '2 Minutes' : timeoutDuration === 30 ? '30 Seconds' : '1 Minute'})`}
+                      className="px-2.5 py-1 rounded-xl bg-amber-950/80 hover:bg-amber-900 text-xs font-bold text-amber-300 disabled:opacity-30 border border-amber-700 transition-all active:scale-95 shadow-md flex items-center gap-1"
+                      title={`Call Timeout (${timeoutDuration === 120 ? '2 Minutes' : '1 Minute'})`}
                     >
-                      CALL TO
+                      <Clock className="w-3 h-3" />
+                      <span>CALL TO</span>
                     </button>
                     {onChangeTimeoutDuration && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextDuration = timeoutDuration === 60 ? 120 : timeoutDuration === 120 ? 30 : 60;
-                          onChangeTimeoutDuration(nextDuration);
-                        }}
-                        className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono font-bold text-amber-400 border border-slate-700 transition-colors"
-                        title="Click to cycle timeout duration: 1 min / 2 min / 30s"
-                      >
-                        ⏱️ {timeoutDuration === 120 ? '2m' : timeoutDuration === 30 ? '30s' : '1m'}
-                      </button>
+                      <div className="flex items-center rounded-xl bg-slate-950 border border-slate-800 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => onChangeTimeoutDuration(60)}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                            timeoutDuration === 60
+                              ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                          title="Set 1 Minute Timeout Clock"
+                        >
+                          1m
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onChangeTimeoutDuration(120)}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                            timeoutDuration === 120
+                              ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                          title="Set 2 Minutes Timeout Clock"
+                        >
+                          2m
+                        </button>
+                      </div>
                     )}
                   </div>
                 )

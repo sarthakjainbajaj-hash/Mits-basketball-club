@@ -22,17 +22,34 @@ const DigitalTimer = ({
     }
   }, [remainingTime, timerStartedAt]);
 
+  const localReceivedAtRef = useRef(Date.now());
+  const lastStartedAtRef = useRef(timerStartedAt);
+
+  useEffect(() => {
+    if (timerStartedAt !== lastStartedAtRef.current) {
+      lastStartedAtRef.current = timerStartedAt;
+      localReceivedAtRef.current = Date.now();
+    }
+  }, [timerStartedAt]);
+
   useEffect(() => {
     let animationFrameId;
 
-    // Clock skew compensation between client device Date.now() and server's timestamp
-    const clientNowAtReceive = Date.now();
-    const clockOffset = serverTime ? clientNowAtReceive - serverTime : 0;
-
     const updateTimer = () => {
       if (timerRunning && timerStartedAt) {
-        const adjustedNow = Date.now() - clockOffset;
-        const elapsed = (adjustedNow - timerStartedAt) / 1000;
+        let elapsed = 0;
+        const now = Date.now();
+
+        // If local client started the timer or client clock aligns with timerStartedAt
+        if (!serverTime || Math.abs(now - timerStartedAt) < 1800000) {
+          elapsed = Math.max(0, (now - timerStartedAt) / 1000);
+        } else {
+          // Remote spectator client synchronization
+          const serverBaseElapsed = (serverTime > timerStartedAt) ? (serverTime - timerStartedAt) / 1000 : 0;
+          const additionalClientElapsed = Math.max(0, (now - localReceivedAtRef.current) / 1000);
+          elapsed = serverBaseElapsed + additionalClientElapsed;
+        }
+
         const currentRemaining = Math.max(0, remainingTime - elapsed);
         setDisplaySeconds(currentRemaining);
 
@@ -57,7 +74,7 @@ const DigitalTimer = ({
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [remainingTime, timerRunning, timerStartedAt, serverTime]);
+  }, [remainingTime, timerRunning, timerStartedAt]);
 
   const mins = Math.floor(Math.max(0, displaySeconds) / 60);
   const secs = Math.floor(Math.max(0, displaySeconds) % 60);
