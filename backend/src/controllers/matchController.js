@@ -443,6 +443,17 @@ const createMatch = async (req, res) => {
       playerStats: initialPlayerStats,
     });
 
+    if (tournamentId) {
+      try {
+        const Tournament = require('../models/Tournament');
+        await Tournament.findByIdAndUpdate(tournamentId, {
+          $addToSet: { teams: { $each: [teamA, teamB] } },
+        });
+      } catch (tErr) {
+        console.error('Non-blocking tournament team auto-registration error:', tErr);
+      }
+    }
+
     const populatedMatch = await Match.findById(match._id)
       .populate('teamA', 'name shortName logo primaryColor secondaryColor')
       .populate('teamB', 'name shortName logo primaryColor secondaryColor')

@@ -27,6 +27,7 @@ const TournamentsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
+    format: '5x5',
     organizer: '',
     venue: '',
     startDate: '',
@@ -64,8 +65,9 @@ const TournamentsPage = () => {
   const openCreateModal = () => {
     setFormData({
       name: '',
-      organizer: 'FIBA 3x3 & HoopScore League',
-      venue: 'Metropolitan Sports Complex',
+      format: '5x5',
+      organizer: 'College Basketball Championship',
+      venue: 'University Indoor Stadium',
       startDate: new Date().toISOString().slice(0, 10),
       endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10),
       description: '',
@@ -120,14 +122,14 @@ const TournamentsPage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
-            <Trophy className="w-8 h-8 text-amber-400" /> Official 3x3 Tournaments
+            <Trophy className="w-8 h-8 text-amber-400" /> Basketball Tournaments & Circuits
           </h1>
           <p className="text-sm text-slate-400">
-            FIBA 3x3 verified circuits, live standings, and championship brackets
+            College championships, 5x5 full-court & 3x3 verified leagues, live standings & automated fixtures
           </p>
         </div>
 
-        {isAdmin && (
+        {(isAdmin || isScorer) && (
           <button
             onClick={openCreateModal}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95 whitespace-nowrap self-start sm:self-auto"
@@ -163,6 +165,14 @@ const TournamentsPage = () => {
                     >
                       {t.status}
                     </span>
+                    <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">
+                      🏀 {t.format || '5x5'}
+                    </span>
+                    {t.liveCount > 0 && (
+                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 animate-pulse">
+                        ● {t.liveCount} LIVE
+                      </span>
+                    )}
                     {(isAdmin || isScorer) && (
                       <button
                         onClick={(e) => {
@@ -188,7 +198,7 @@ const TournamentsPage = () => {
                 </h3>
 
                 <p className="text-xs text-slate-400 mb-4 line-clamp-2">
-                  {t.description || 'Professional 3x3 Basketball tournament series.'}
+                  {t.description || 'Championship basketball tournament and league.'}
                 </p>
 
                 <div className="space-y-2 text-xs font-mono text-slate-300 py-3 border-y border-slate-800">
@@ -196,9 +206,14 @@ const TournamentsPage = () => {
                     <MapPin className="w-3.5 h-3.5 text-slate-500" />
                     <span className="truncate">{t.venue || 'TBA'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{t.teams?.length || 0} Registered Teams</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-3.5 h-3.5 text-slate-500" />
+                      <span>{t.teams?.length || 0} Teams</span>
+                    </div>
+                    <span className="text-cyan-400 font-bold">
+                      {t.matchCount || 0} Matches {t.completedCount > 0 ? `(${t.completedCount} done)` : ''}
+                    </span>
                   </div>
                 </div>
 
@@ -244,7 +259,7 @@ const TournamentsPage = () => {
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="font-bold text-white text-lg">Create New 3x3 Tournament</h3>
+              <h3 className="font-bold text-white text-lg">Create New Basketball Tournament</h3>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-slate-400 hover:text-white p-1"
@@ -256,13 +271,43 @@ const TournamentsPage = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
+                  Tournament Format
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, format: '5x5' })}
+                    className={`py-2 px-3 rounded-xl text-xs font-mono font-bold border transition-all ${
+                      formData.format === '5x5'
+                        ? 'bg-blue-600 border-blue-500 text-white shadow-md'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🏀 5x5 Full Court / College
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, format: '3x3' })}
+                    className={`py-2 px-3 rounded-xl text-xs font-mono font-bold border transition-all ${
+                      formData.format === '3x3'
+                        ? 'bg-orange-600 border-orange-500 text-white shadow-md'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🏀 3x3 Half Court (FIBA)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono uppercase font-bold text-slate-400 mb-1">
                   Tournament Name
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. National 3x3 Pro Circuit 2026"
+                  placeholder="e.g. MITS Inter-College Basketball Trophy 2026"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
                   required
                 />

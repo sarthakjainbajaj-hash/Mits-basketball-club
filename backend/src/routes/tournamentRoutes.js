@@ -9,6 +9,7 @@ const {
   deleteTournament,
   addTeamToTournament,
   removeTeamFromTournament,
+  generateFixtures,
 } = require('../controllers/tournamentController');
 const { protect } = require('../middleware/auth');
 const { authorize } = require('../middleware/role');
@@ -26,5 +27,6 @@ router.route('/:id')
 
 router.post('/:id/teams', protect, authorize('admin', 'scorer'), addTeamToTournament);
 router.delete('/:id/teams/:teamId', protect, authorize('admin', 'scorer'), removeTeamFromTournament);
+router.post('/:id/generate-fixtures', protect, authorize('admin', 'scorer'), generateFixtures);
 
 module.exports = router;

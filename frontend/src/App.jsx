@@ -95,7 +95,7 @@ function App() {
                 <Route
                   path="/matches/create"
                   element={
-                    <ProtectedRoute allowedRoles={['admin']}>
+                    <ProtectedRoute allowedRoles={['admin', 'scorer']}>
                       <CreateMatchPage />
                     </ProtectedRoute>
                   }

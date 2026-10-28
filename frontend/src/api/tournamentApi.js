@@ -10,6 +10,7 @@ export const tournamentApi = {
   addTeam: (id, teamId) => axiosClient.post(`/tournaments/${id}/teams`, { teamId }),
   addTeams: (id, teamIds) => axiosClient.post(`/tournaments/${id}/teams`, { teamIds }),
   removeTeam: (id, teamId) => axiosClient.delete(`/tournaments/${id}/teams/${teamId}`),
+  generateFixtures: (id, data) => axiosClient.post(`/tournaments/${id}/generate-fixtures`, data),
 };
 
 export default tournamentApi;

@@ -23,6 +23,8 @@ import {
   Search,
   AlertCircle,
   ShieldCheck,
+  Edit3,
+  Zap,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -45,6 +47,34 @@ const TournamentDetailsPage = () => {
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
   const [addingTeamId, setAddingTeamId] = useState(null);
+
+  // Edit Tournament Modal State
+  const [isEditTournamentModalOpen, setIsEditTournamentModalOpen] = useState(false);
+  const [editingTournament, setEditingTournament] = useState(false);
+  const [editTournamentForm, setEditTournamentForm] = useState({
+    name: '',
+    format: '5x5',
+    organizer: '',
+    venue: '',
+    startDate: '',
+    endDate: '',
+    description: '',
+    status: 'UPCOMING',
+  });
+
+  // Auto-Generate Fixtures Modal State
+  const [isAutoFixtureModalOpen, setIsAutoFixtureModalOpen] = useState(false);
+  const [generatingFixtures, setGeneratingFixtures] = useState(false);
+  const [autoFixtureForm, setAutoFixtureForm] = useState({
+    matchType: '5x5',
+    matchStructure: 'HALVES',
+    quarterDuration: 900,
+    shotClock: 24,
+    venue: '',
+    startDate: new Date().toISOString().split('T')[0],
+    startTime: '10:00',
+    intervalMinutes: 60,
+  });
 
   // Fix Match Modal State
   const [isFixMatchModalOpen, setIsFixMatchModalOpen] = useState(false);
@@ -161,6 +191,81 @@ const TournamentDetailsPage = () => {
         message: 'Failed to remove team: ' + (err.response?.data?.message || err.message),
         type: 'error',
       });
+    }
+  };
+
+  // Open Edit Tournament Modal
+  const handleOpenEditTournamentModal = () => {
+    if (!tournament) return;
+    setEditTournamentForm({
+      name: tournament.name || '',
+      format: tournament.format || '5x5',
+      organizer: tournament.organizer || '',
+      venue: tournament.venue || '',
+      startDate: tournament.startDate ? new Date(tournament.startDate).toISOString().split('T')[0] : '',
+      endDate: tournament.endDate ? new Date(tournament.endDate).toISOString().split('T')[0] : '',
+      description: tournament.description || '',
+      status: tournament.status || 'UPCOMING',
+    });
+    setIsEditTournamentModalOpen(true);
+  };
+
+  const handleEditTournamentSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setEditingTournament(true);
+      const res = await tournamentApi.update(id, editTournamentForm);
+      setToast({ message: 'Tournament details updated successfully!', type: 'success' });
+      setIsEditTournamentModalOpen(false);
+      setTournament((prev) => ({ ...prev, ...res?.data }));
+      await fetchTournamentData();
+    } catch (err) {
+      setToast({
+        message: 'Failed to update tournament: ' + (err.response?.data?.message || err.message),
+        type: 'error',
+      });
+    } finally {
+      setEditingTournament(false);
+    }
+  };
+
+  // Open Auto-Generate Fixtures Modal
+  const handleOpenAutoFixtureModal = () => {
+    setAutoFixtureForm({
+      matchType: tournament?.format || '5x5',
+      matchStructure: 'HALVES',
+      quarterDuration: 900,
+      shotClock: 24,
+      venue: tournament?.venue || 'Main Court',
+      startDate: tournament?.startDate
+        ? new Date(tournament.startDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      startTime: '10:00',
+      intervalMinutes: 60,
+    });
+    setIsAutoFixtureModalOpen(true);
+  };
+
+  const handleAutoFixtureSubmit = async (e) => {
+    e.preventDefault();
+    if ((tournament?.teams || []).length < 2) {
+      setToast({ message: 'At least 2 teams required to generate fixtures', type: 'error' });
+      return;
+    }
+    try {
+      setGeneratingFixtures(true);
+      const res = await tournamentApi.generateFixtures(id, autoFixtureForm);
+      setToast({ message: res?.message || 'Successfully generated round-robin fixtures!', type: 'success' });
+      setIsAutoFixtureModalOpen(false);
+      await fetchTournamentData();
+      setActiveTab('matches');
+    } catch (err) {
+      setToast({
+        message: 'Failed to generate fixtures: ' + (err.response?.data?.message || err.message),
+        type: 'error',
+      });
+    } finally {
+      setGeneratingFixtures(false);
     }
   };
 
@@ -287,7 +392,24 @@ const TournamentDetailsPage = () => {
         </Link>
 
         {(isAdmin || isScorer) && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleOpenEditTournamentModal}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs border border-slate-700 transition-all active:scale-95"
+              title="Edit Tournament Details"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Edit Details</span>
+            </button>
+            <button
+              onClick={handleOpenAutoFixtureModal}
+              disabled={tournamentTeams.length < 2}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md shadow-orange-600/30 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              title={tournamentTeams.length < 2 ? 'Add at least 2 teams first' : 'Auto-Generate Round-Robin Fixtures'}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-200" />
+              <span>Auto-Generate Fixtures</span>
+            </button>
             <button
               onClick={handleOpenFixMatchModal}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shadow-md shadow-orange-600/30 transition-all active:scale-95"
@@ -316,6 +438,9 @@ const TournamentDetailsPage = () => {
             <span className="text-[11px] font-mono font-bold uppercase px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
               {tournament.status}
             </span>
+            <span className="text-[11px] font-mono font-bold uppercase px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              🏀 {tournament.format || '5x5'} Format
+            </span>
             <span className="text-xs text-slate-400 font-mono flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-slate-500" />
               {new Date(tournament.startDate).toLocaleDateString()} —{' '}
@@ -326,6 +451,12 @@ const TournamentDetailsPage = () => {
           <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
             {tournament.name}
           </h1>
+
+          {tournament.description && (
+            <p className="text-sm text-slate-300 max-w-3xl leading-relaxed">
+              {tournament.description}
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-6 text-xs font-mono text-slate-300 pt-2">
             {tournament.organizer && (
@@ -386,16 +517,18 @@ const TournamentDetailsPage = () => {
         </div>
       </div>
 
-      {/* Tab: 3x3 Tournament Standings Table */}
+      {/* Tab: Standings Table */}
       {activeTab === 'standings' && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-4 p-6">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Trophy className="w-5 h-5 text-amber-400" />
-              <h2 className="font-bold text-white text-base">FIBA 3x3 Circuit Standings</h2>
+              <h2 className="font-bold text-white text-base">
+                {tournament.format === '3x3' ? 'FIBA 3x3 Standings' : 'Tournament Points Table & Standings'}
+              </h2>
             </div>
             <span className="text-xs font-mono text-slate-400">
-              Ranked by: Wins &gt; Point Diff &gt; Points For
+              Ranked by: PTS (Wins) &gt; Win% &gt; Diff &gt; Points For
             </span>
           </div>
 
@@ -408,9 +541,12 @@ const TournamentDetailsPage = () => {
                   <th className="py-3 px-3 text-center">Played</th>
                   <th className="py-3 px-3 text-center text-emerald-400 font-bold">Won</th>
                   <th className="py-3 px-3 text-center text-red-400">Lost</th>
+                  <th className="py-3 px-3 text-center text-slate-400">Draw</th>
                   <th className="py-3 px-3 text-center text-amber-400 font-bold">PF</th>
                   <th className="py-3 px-3 text-center">PA</th>
                   <th className="py-3 px-3 text-center font-bold">Diff</th>
+                  <th className="py-3 px-3 text-center text-cyan-400 font-bold">Win%</th>
+                  <th className="py-3 px-3 text-center text-orange-400 font-bold">PTS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono text-xs sm:text-sm">
@@ -418,7 +554,7 @@ const TournamentDetailsPage = () => {
                   standings.map((st, idx) => (
                     <tr key={st.teamId} className="hover:bg-slate-800/40 transition-colors">
                       <td className="py-3.5 px-3 text-center font-bold text-slate-400">
-                        {idx + 1}
+                        {idx === 0 ? '🥇 1' : idx === 1 ? '🥈 2' : idx === 2 ? '🥉 3' : idx + 1}
                       </td>
                       <td className="py-3.5 px-4 font-sans font-bold text-white">
                         <Link
@@ -438,6 +574,7 @@ const TournamentDetailsPage = () => {
                         {st.won}
                       </td>
                       <td className="py-3.5 px-3 text-center text-red-400">{st.lost}</td>
+                      <td className="py-3.5 px-3 text-center text-slate-400">{st.draw || 0}</td>
                       <td className="py-3.5 px-3 text-center font-digital font-bold text-amber-400 text-base">
                         {st.pointsFor}
                       </td>
@@ -449,11 +586,17 @@ const TournamentDetailsPage = () => {
                       >
                         {st.difference > 0 ? `+${st.difference}` : st.difference}
                       </td>
+                      <td className="py-3.5 px-3 text-center font-digital text-cyan-400 font-bold">
+                        {st.winPct || '.000'}
+                      </td>
+                      <td className="py-3.5 px-3 text-center font-digital font-bold text-orange-400 text-base bg-orange-500/10">
+                        {st.pts || 0}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-500 font-sans">
+                    <td colSpan={11} className="py-8 text-center text-slate-500 font-sans">
                       No match results recorded in this tournament yet
                     </td>
                   </tr>
@@ -1207,6 +1350,359 @@ const TournamentDetailsPage = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Tournament Modal */}
+      {isEditTournamentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsEditTournamentModalOpen(false)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                <Edit3 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white">Edit Tournament</h3>
+                <p className="text-xs text-slate-400 font-mono">Update tournament format, schedule, and metadata</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleEditTournamentSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Tournament Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTournamentForm.name}
+                  onChange={(e) => setEditTournamentForm({ ...editTournamentForm, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Tournament Format
+                  </label>
+                  <select
+                    value={editTournamentForm.format}
+                    onChange={(e) => setEditTournamentForm({ ...editTournamentForm, format: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="5x5">🏀 5x5 College / Full Court</option>
+                    <option value="3x3">🏀 3x3 Half Court</option>
+                    <option value="OPEN">🌐 Open Format</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Tournament Status
+                  </label>
+                  <select
+                    value={editTournamentForm.status}
+                    onChange={(e) => setEditTournamentForm({ ...editTournamentForm, status: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="UPCOMING">UPCOMING</option>
+                    <option value="ONGOING">ONGOING</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Organizer
+                  </label>
+                  <input
+                    type="text"
+                    value={editTournamentForm.organizer}
+                    onChange={(e) => setEditTournamentForm({ ...editTournamentForm, organizer: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Venue
+                  </label>
+                  <input
+                    type="text"
+                    value={editTournamentForm.venue}
+                    onChange={(e) => setEditTournamentForm({ ...editTournamentForm, venue: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editTournamentForm.startDate}
+                    onChange={(e) => setEditTournamentForm({ ...editTournamentForm, startDate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editTournamentForm.endDate}
+                    onChange={(e) => setEditTournamentForm({ ...editTournamentForm, endDate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Description
+                </label>
+                <textarea
+                  rows={3}
+                  value={editTournamentForm.description}
+                  onChange={(e) => setEditTournamentForm({ ...editTournamentForm, description: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500 resize-none"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditTournamentModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editingTournament}
+                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/30 transition-all disabled:opacity-50"
+                >
+                  {editingTournament ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Generate Fixtures Modal */}
+      {isAutoFixtureModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsAutoFixtureModalOpen(false)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white">Auto-Generate Fixtures</h3>
+                <p className="text-xs text-slate-400 font-mono">Round-Robin schedule generator (Berger algorithm)</p>
+              </div>
+            </div>
+
+            {/* Info Box */}
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 mb-4 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-amber-300">Registered Teams</span>
+                <span className="text-xs font-mono font-bold text-white bg-amber-500/30 px-2 py-0.5 rounded-md">
+                  {tournamentTeams.length} Teams
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Will auto-create{' '}
+                <span className="font-bold text-amber-400">
+                  {(tournamentTeams.length * (tournamentTeams.length - 1)) / 2} matches
+                </span>{' '}
+                so every team plays against every other team once.
+              </p>
+            </div>
+
+            <form onSubmit={handleAutoFixtureSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Format
+                  </label>
+                  <select
+                    value={autoFixtureForm.matchType}
+                    onChange={(e) => setAutoFixtureForm({ ...autoFixtureForm, matchType: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="5x5">🏀 5x5 College / Full Court</option>
+                    <option value="3x3">🏀 3x3 Half Court</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Structure
+                  </label>
+                  <select
+                    value={autoFixtureForm.matchStructure}
+                    onChange={(e) =>
+                      setAutoFixtureForm({
+                        ...autoFixtureForm,
+                        matchStructure: e.target.value,
+                        quarterDuration: e.target.value === 'HALVES' ? 900 : 600,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="HALVES">2 Halves (College Standard)</option>
+                    <option value="QUARTERS">4 Quarters (Pro Standard)</option>
+                    <option value="SINGLE">1 Single Period</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                      Period Duration
+                    </label>
+                    <span className="text-[11px] font-mono font-bold text-white">
+                      {Math.floor(autoFixtureForm.quarterDuration / 60)}:00 Mins
+                    </span>
+                  </div>
+                  <select
+                    value={autoFixtureForm.quarterDuration}
+                    onChange={(e) => setAutoFixtureForm({ ...autoFixtureForm, quarterDuration: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value={300}>5 Minutes</option>
+                    <option value={480}>8 Minutes</option>
+                    <option value={600}>10 Minutes</option>
+                    <option value={720}>12 Minutes</option>
+                    <option value={900}>15 Minutes</option>
+                    <option value={1200}>20 Minutes</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Shot Clock
+                  </label>
+                  <select
+                    value={autoFixtureForm.shotClock}
+                    onChange={(e) => setAutoFixtureForm({ ...autoFixtureForm, shotClock: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value={24}>24 Seconds (FIBA / College)</option>
+                    <option value={14}>14 Seconds</option>
+                    <option value={12}>12 Seconds (3x3)</option>
+                    <option value={0}>Disabled / OFF</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={autoFixtureForm.startDate}
+                    onChange={(e) => setAutoFixtureForm({ ...autoFixtureForm, startDate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    First Match Time
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={autoFixtureForm.startTime}
+                    onChange={(e) => setAutoFixtureForm({ ...autoFixtureForm, startTime: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Interval Between Matches
+                  </label>
+                  <select
+                    value={autoFixtureForm.intervalMinutes}
+                    onChange={(e) => setAutoFixtureForm({ ...autoFixtureForm, intervalMinutes: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value={30}>30 Minutes</option>
+                    <option value={45}>45 Minutes</option>
+                    <option value={60}>60 Minutes (1 Hour)</option>
+                    <option value={75}>75 Minutes</option>
+                    <option value={90}>90 Minutes (1.5 Hours)</option>
+                    <option value={120}>120 Minutes (2 Hours)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Venue / Court
+                  </label>
+                  <input
+                    type="text"
+                    value={autoFixtureForm.venue}
+                    onChange={(e) => setAutoFixtureForm({ ...autoFixtureForm, venue: e.target.value })}
+                    placeholder="e.g. Main Court"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAutoFixtureModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={generatingFixtures || tournamentTeams.length < 2}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md shadow-orange-600/30 transition-all disabled:opacity-50"
+                >
+                  {generatingFixtures ? 'Generating Fixtures...' : '⚡ Generate Fixtures Now'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

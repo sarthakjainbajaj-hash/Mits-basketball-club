@@ -67,6 +67,15 @@ const startMatch = async (req, res) => {
 
     await match.save();
 
+    if (match.tournamentId) {
+      try {
+        const Tournament = require('../models/Tournament');
+        await Tournament.findByIdAndUpdate(match.tournamentId, { status: 'ONGOING' });
+      } catch (tErr) {
+        console.error('Non-blocking tournament status update:', tErr);
+      }
+    }
+
     const event = await MatchEvent.create({
       matchId: match._id,
       type: 'TIMER_START',
@@ -1279,6 +1288,19 @@ const endMatch = async (req, res) => {
     await persistMatchStats(match);
 
     await match.save();
+
+    if (match.tournamentId) {
+      try {
+        const Tournament = require('../models/Tournament');
+        const remainingMatches = await Match.find({ tournamentId: match.tournamentId, _id: { $ne: match._id } });
+        const allCompleted = remainingMatches.length > 0 && remainingMatches.every((m) => m.status === 'COMPLETED');
+        await Tournament.findByIdAndUpdate(match.tournamentId, {
+          status: allCompleted ? 'COMPLETED' : 'ONGOING',
+        });
+      } catch (tErr) {
+        console.error('Non-blocking tournament status update on endMatch:', tErr);
+      }
+    }
 
     const event = await MatchEvent.create({
       matchId: match._id,

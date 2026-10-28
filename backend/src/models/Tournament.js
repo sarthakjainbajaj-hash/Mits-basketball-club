@@ -36,6 +36,11 @@ const tournamentSchema = new mongoose.Schema(
         ref: 'Team',
       },
     ],
+    format: {
+      type: String,
+      enum: ['5x5', '3x3', 'OPEN'],
+      default: '5x5',
+    },
     status: {
       type: String,
       enum: ['UPCOMING', 'ONGOING', 'COMPLETED'],
