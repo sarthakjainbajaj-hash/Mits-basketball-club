@@ -12,48 +12,69 @@ const DigitalTimer = ({
   const onExpireRef = useRef(onExpire);
   const hasExpiredRef = useRef(false);
 
+  // Lowest displayed value during active run to enforce strict monotonic countdown (timer NEVER jumps up)
+  const minDisplayedRef = useRef(remainingTime);
+
+  // Server clock offset (serverTime - localClientTime)
+  const serverOffsetRef = useRef(0);
+
   useEffect(() => {
     onExpireRef.current = onExpire;
   }, [onExpire]);
 
+  // Compute and smooth server clock offset
   useEffect(() => {
-    if (remainingTime > 0) {
-      hasExpiredRef.current = false;
+    if (serverTime) {
+      const currentOffset = serverTime - Date.now();
+      // Smooth out small jitter; only update if significant or initial
+      if (serverOffsetRef.current === 0 || Math.abs(currentOffset - serverOffsetRef.current) > 400) {
+        serverOffsetRef.current = currentOffset;
+      }
     }
-  }, [remainingTime, timerStartedAt]);
+  }, [serverTime]);
 
-  const localReceivedAtRef = useRef(Date.now());
-  const lastStartedAtRef = useRef(timerStartedAt);
-
+  // Reset monotonic floor and expiration flag whenever clock stops, resets, or changes period
   useEffect(() => {
-    if (timerStartedAt !== lastStartedAtRef.current) {
-      lastStartedAtRef.current = timerStartedAt;
-      localReceivedAtRef.current = Date.now();
-    }
-  }, [timerStartedAt]);
+    hasExpiredRef.current = false;
+    minDisplayedRef.current = remainingTime;
+    setDisplaySeconds(remainingTime);
+  }, [remainingTime, timerStartedAt, timerRunning === false]);
 
   useEffect(() => {
     let animationFrameId;
+    let lastRenderedWhole = -1;
+    let lastRenderedTenth = -1;
 
     const updateTimer = () => {
       if (timerRunning && timerStartedAt) {
-        let elapsed = 0;
-        const now = Date.now();
+        const now = Date.now() + serverOffsetRef.current;
+        const elapsed = Math.max(0, (now - timerStartedAt) / 1000);
+        let rawRemaining = Math.max(0, remainingTime - elapsed);
 
-        // If local client started the timer or client clock aligns with timerStartedAt
-        if (!serverTime || Math.abs(now - timerStartedAt) < 1800000) {
-          elapsed = Math.max(0, (now - timerStartedAt) / 1000);
+        // Monotonic non-increasing guarantee: timer must NEVER jump upwards while running
+        if (rawRemaining < minDisplayedRef.current) {
+          minDisplayedRef.current = rawRemaining;
         } else {
-          // Remote spectator client synchronization
-          const serverBaseElapsed = (serverTime > timerStartedAt) ? (serverTime - timerStartedAt) / 1000 : 0;
-          const additionalClientElapsed = Math.max(0, (now - localReceivedAtRef.current) / 1000);
-          elapsed = serverBaseElapsed + additionalClientElapsed;
+          rawRemaining = minDisplayedRef.current;
         }
 
-        const currentRemaining = Math.max(0, remainingTime - elapsed);
-        setDisplaySeconds(currentRemaining);
+        const wholeSecs = Math.floor(rawRemaining);
+        const tenthSecs = Math.floor((rawRemaining % 1) * 10);
 
-        if (currentRemaining <= 0) {
+        // Throttled frame updates: only trigger React re-render when visible digits change
+        const shouldUpdate =
+          rawRemaining <= 60
+            ? wholeSecs !== lastRenderedWhole || tenthSecs !== lastRenderedTenth
+            : wholeSecs !== lastRenderedWhole;
+
+        if (shouldUpdate) {
+          lastRenderedWhole = wholeSecs;
+          lastRenderedTenth = tenthSecs;
+          setDisplaySeconds(rawRemaining);
+        }
+
+        if (rawRemaining <= 0) {
+          setDisplaySeconds(0);
           if (!hasExpiredRef.current) {
             hasExpiredRef.current = true;
             if (onExpireRef.current) onExpireRef.current();
@@ -64,6 +85,7 @@ const DigitalTimer = ({
         animationFrameId = requestAnimationFrame(updateTimer);
       } else {
         setDisplaySeconds(remainingTime);
+        minDisplayedRef.current = remainingTime;
       }
     };
 

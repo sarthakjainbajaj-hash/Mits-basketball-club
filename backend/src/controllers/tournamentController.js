@@ -13,29 +13,42 @@ const getTournaments = async (req, res) => {
       .sort({ startDate: -1 })
       .lean();
 
-    // Populate live statuses and match counts
-    const tournamentsWithDetails = await Promise.all(
-      tournaments.map(async (t) => {
-        const matches = await Match.find({ tournamentId: t._id }).select('status');
-        let status = t.status || 'UPCOMING';
-        if (matches.length > 0) {
-          if (matches.some((m) => m.status === 'LIVE' || m.status === 'PAUSED')) {
-            status = 'ONGOING';
-          } else if (matches.every((m) => m.status === 'COMPLETED')) {
-            status = 'COMPLETED';
-          } else if (matches.some((m) => m.status === 'COMPLETED')) {
-            status = 'ONGOING';
-          }
+    const tournamentIds = tournaments.map((t) => t._id);
+
+    // Fetch all matches for these tournaments in a single indexed query
+    const allMatches = await Match.find({ tournamentId: { $in: tournamentIds } })
+      .select('tournamentId status')
+      .lean();
+
+    // Group matches by tournamentId in memory (instant lookup)
+    const matchesByTournament = {};
+    for (const m of allMatches) {
+      const tid = m.tournamentId?.toString();
+      if (!tid) continue;
+      if (!matchesByTournament[tid]) matchesByTournament[tid] = [];
+      matchesByTournament[tid].push(m);
+    }
+
+    const tournamentsWithDetails = tournaments.map((t) => {
+      const tMatches = matchesByTournament[t._id.toString()] || [];
+      let status = t.status || 'UPCOMING';
+      if (tMatches.length > 0) {
+        if (tMatches.some((m) => m.status === 'LIVE' || m.status === 'PAUSED')) {
+          status = 'ONGOING';
+        } else if (tMatches.every((m) => m.status === 'COMPLETED')) {
+          status = 'COMPLETED';
+        } else if (tMatches.some((m) => m.status === 'COMPLETED')) {
+          status = 'ONGOING';
         }
-        return {
-          ...t,
-          status,
-          matchCount: matches.length,
-          completedCount: matches.filter((m) => m.status === 'COMPLETED').length,
-          liveCount: matches.filter((m) => m.status === 'LIVE' || m.status === 'PAUSED').length,
-        };
-      })
-    );
+      }
+      return {
+        ...t,
+        status,
+        matchCount: tMatches.length,
+        completedCount: tMatches.filter((m) => m.status === 'COMPLETED').length,
+        liveCount: tMatches.filter((m) => m.status === 'LIVE' || m.status === 'PAUSED').length,
+      };
+    });
 
     res.status(200).json({ success: true, count: tournamentsWithDetails.length, data: tournamentsWithDetails });
   } catch (error) {
@@ -48,20 +61,20 @@ const getTournaments = async (req, res) => {
 // @access  Public
 const getTournamentById = async (req, res) => {
   try {
-    const tournament = await Tournament.findById(req.params.id).populate(
-      'teams',
-      'name shortName logo primaryColor secondaryColor coach'
-    );
+    const tournament = await Tournament.findById(req.params.id)
+      .populate('teams', 'name shortName logo primaryColor secondaryColor coach')
+      .lean();
 
     if (!tournament) {
       return res.status(404).json({ success: false, message: 'Tournament not found' });
     }
 
-    // Fetch tournament matches
+    // Fetch tournament matches with populated team data in a single lean query
     const matches = await Match.find({ tournamentId: tournament._id })
       .populate('teamA', 'name shortName logo primaryColor secondaryColor')
       .populate('teamB', 'name shortName logo primaryColor secondaryColor')
-      .sort({ scheduledDate: 1, scheduledTime: 1 });
+      .sort({ scheduledDate: 1, scheduledTime: 1 })
+      .lean();
 
     // Live calculate status
     let liveStatus = tournament.status || 'UPCOMING';
@@ -83,7 +96,7 @@ const getTournamentById = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        ...tournament.toObject(),
+        ...tournament,
         status: liveStatus,
         matches,
       },
@@ -98,15 +111,19 @@ const getTournamentById = async (req, res) => {
 // @access  Public
 const getTournamentStandings = async (req, res) => {
   try {
-    const tournament = await Tournament.findById(req.params.id).populate('teams');
+    const tournament = await Tournament.findById(req.params.id).populate('teams').lean();
     if (!tournament) {
       return res.status(404).json({ success: false, message: 'Tournament not found' });
     }
 
+    // Populate teamA and teamB upfront with lean query for 0 database calls in loop
     const completedMatches = await Match.find({
       tournamentId: tournament._id,
       status: 'COMPLETED',
-    });
+    })
+      .populate('teamA', 'name shortName logo primaryColor')
+      .populate('teamB', 'name shortName logo primaryColor')
+      .lean();
 
     // Initialize standings map for each registered team
     const standingsMap = {};
@@ -138,47 +155,41 @@ const getTournamentStandings = async (req, res) => {
 
       if (!teamAId || !teamBId) continue;
 
-      // In case a team played but was not in tournament.teams array, fetch and add it dynamically
-      if (!standingsMap[teamAId]) {
-        const teamDoc = await Team.findById(teamAId);
-        if (teamDoc) {
-          standingsMap[teamAId] = {
-            teamId: teamDoc._id,
-            teamName: teamDoc.name,
-            shortName: teamDoc.shortName || teamDoc.name?.slice(0, 3) || 'TMA',
-            logo: teamDoc.logo,
-            primaryColor: teamDoc.primaryColor || '#FF5722',
-            played: 0,
-            won: 0,
-            lost: 0,
-            draw: 0,
-            pointsFor: 0,
-            pointsAgainst: 0,
-            difference: 0,
-            pts: 0,
-          };
-        }
+      // In case a team played but was not in tournament.teams array, register it from populated data
+      if (!standingsMap[teamAId] && m.teamA && typeof m.teamA === 'object') {
+        standingsMap[teamAId] = {
+          teamId: m.teamA._id || teamAId,
+          teamName: m.teamA.name || 'Team A',
+          shortName: m.teamA.shortName || m.teamA.name?.slice(0, 3) || 'TMA',
+          logo: m.teamA.logo,
+          primaryColor: m.teamA.primaryColor || '#FF5722',
+          played: 0,
+          won: 0,
+          lost: 0,
+          draw: 0,
+          pointsFor: 0,
+          pointsAgainst: 0,
+          difference: 0,
+          pts: 0,
+        };
       }
 
-      if (!standingsMap[teamBId]) {
-        const teamDoc = await Team.findById(teamBId);
-        if (teamDoc) {
-          standingsMap[teamBId] = {
-            teamId: teamDoc._id,
-            teamName: teamDoc.name,
-            shortName: teamDoc.shortName || teamDoc.name?.slice(0, 3) || 'TMB',
-            logo: teamDoc.logo,
-            primaryColor: teamDoc.primaryColor || '#06B6D4',
-            played: 0,
-            won: 0,
-            lost: 0,
-            draw: 0,
-            pointsFor: 0,
-            pointsAgainst: 0,
-            difference: 0,
-            pts: 0,
-          };
-        }
+      if (!standingsMap[teamBId] && m.teamB && typeof m.teamB === 'object') {
+        standingsMap[teamBId] = {
+          teamId: m.teamB._id || teamBId,
+          teamName: m.teamB.name || 'Team B',
+          shortName: m.teamB.shortName || m.teamB.name?.slice(0, 3) || 'TMB',
+          logo: m.teamB.logo,
+          primaryColor: m.teamB.primaryColor || '#06B6D4',
+          played: 0,
+          won: 0,
+          lost: 0,
+          draw: 0,
+          pointsFor: 0,
+          pointsAgainst: 0,
+          difference: 0,
+          pts: 0,
+        };
       }
 
       const scoreA = Number(m.scoreA) || 0;

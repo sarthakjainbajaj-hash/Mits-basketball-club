@@ -71,17 +71,27 @@ const PublicScoreboardPage = () => {
 
     if (socket) {
       socket.on('match-updated', ({ match: updatedMatch, timestamp }) => {
-        setMatch((prev) => ({
-          ...prev,
-          ...updatedMatch,
-          teamA: (updatedMatch.teamA && typeof updatedMatch.teamA === 'object' && updatedMatch.teamA.name)
-            ? updatedMatch.teamA
-            : prev?.teamA,
-          teamB: (updatedMatch.teamB && typeof updatedMatch.teamB === 'object' && updatedMatch.teamB.name)
-            ? updatedMatch.teamB
-            : prev?.teamB,
-          serverTime: updatedMatch.serverTime || timestamp,
-        }));
+        setMatch((prev) => {
+          if (!prev) return { ...updatedMatch, serverTime: updatedMatch.serverTime || timestamp };
+          const isTimerActive = Boolean(prev.timerRunning && updatedMatch.timerRunning);
+          return {
+            ...prev,
+            ...updatedMatch,
+            teamA: (updatedMatch.teamA && typeof updatedMatch.teamA === 'object' && updatedMatch.teamA.name)
+              ? updatedMatch.teamA
+              : prev?.teamA,
+            teamB: (updatedMatch.teamB && typeof updatedMatch.teamB === 'object' && updatedMatch.teamB.name)
+              ? updatedMatch.teamB
+              : prev?.teamB,
+            timerRunning: updatedMatch.timerRunning,
+            timerStartedAt: isTimerActive ? prev.timerStartedAt : updatedMatch.timerStartedAt,
+            remainingTime: isTimerActive ? prev.remainingTime : (updatedMatch.remainingTime ?? prev.remainingTime),
+            shotClockRunning: updatedMatch.shotClockRunning,
+            shotClockStartedAt: isTimerActive ? prev.shotClockStartedAt : updatedMatch.shotClockStartedAt,
+            shotClockRemaining: isTimerActive ? prev.shotClockRemaining : (updatedMatch.shotClockRemaining ?? prev.shotClockRemaining),
+            serverTime: updatedMatch.serverTime || timestamp,
+          };
+        });
       });
 
       socket.on('buzzer-alert', ({ type, details }) => {

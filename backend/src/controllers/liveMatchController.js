@@ -22,13 +22,13 @@ const getFullMatchData = async (matchId) => {
     .populate('teamA_roster.starters.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
     .populate('teamA_roster.substitutes.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
     .populate('teamB_roster.starters.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
-    .populate('teamB_roster.substitutes.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain');
+    .populate('teamB_roster.substitutes.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
+    .lean();
 
   if (!populatedMatch) return null;
 
-  const responseData = populatedMatch.toObject();
-  responseData.serverTime = Date.now();
-  return responseData;
+  populatedMatch.serverTime = Date.now();
+  return populatedMatch;
 };
 
 // Helper to broadcast match update with populated fields and return populated data

@@ -40,44 +40,56 @@ const ShotClock = ({
     onExpireRef.current = onExpire;
   }, [onExpire]);
 
-  useEffect(() => {
-    if (shotClockRemaining > 0) {
-      hasExpiredRef.current = false;
-    }
-  }, [shotClockRemaining, shotClockStartedAt]);
+  // Lowest displayed value during active run to enforce monotonic countdown (never jumps up)
+  const minDisplayedRef = useRef(shotClockRemaining);
 
-  const localReceivedAtRef = useRef(Date.now());
-  const lastStartedAtRef = useRef(shotClockStartedAt);
+  // Server clock offset (serverTime - localClientTime)
+  const serverOffsetRef = useRef(0);
 
+  // Compute and smooth server clock offset
   useEffect(() => {
-    if (shotClockStartedAt !== lastStartedAtRef.current) {
-      lastStartedAtRef.current = shotClockStartedAt;
-      localReceivedAtRef.current = Date.now();
+    if (serverTime) {
+      const currentOffset = serverTime - Date.now();
+      if (serverOffsetRef.current === 0 || Math.abs(currentOffset - serverOffsetRef.current) > 400) {
+        serverOffsetRef.current = currentOffset;
+      }
     }
-  }, [shotClockStartedAt]);
+  }, [serverTime]);
+
+  // Reset monotonic floor whenever shot clock resets or stops
+  useEffect(() => {
+    hasExpiredRef.current = false;
+    minDisplayedRef.current = shotClockRemaining;
+    setDisplaySecs(shotClockRemaining);
+  }, [shotClockRemaining, shotClockStartedAt, shotClockRunning === false]);
 
   useEffect(() => {
     let animationFrameId;
+    let lastRenderedCeil = -1;
 
     const updateClock = () => {
       if (shotClockRunning && shotClockStartedAt) {
-        let elapsed = 0;
-        const now = Date.now();
+        const now = Date.now() + serverOffsetRef.current;
+        const elapsed = Math.max(0, (now - shotClockStartedAt) / 1000);
+        let rawRemaining = Math.max(0, shotClockRemaining - elapsed);
 
-        // If local client started shot clock or client clock aligns with shotClockStartedAt
-        if (!serverTime || Math.abs(now - shotClockStartedAt) < 1800000) {
-          elapsed = Math.max(0, (now - shotClockStartedAt) / 1000);
+        // Monotonic non-increasing: shot clock must never jump upwards while counting down
+        if (rawRemaining < minDisplayedRef.current) {
+          minDisplayedRef.current = rawRemaining;
         } else {
-          // Remote spectator client synchronization
-          const serverBaseElapsed = (serverTime > shotClockStartedAt) ? (serverTime - shotClockStartedAt) / 1000 : 0;
-          const additionalClientElapsed = Math.max(0, (now - localReceivedAtRef.current) / 1000);
-          elapsed = serverBaseElapsed + additionalClientElapsed;
+          rawRemaining = minDisplayedRef.current;
         }
 
-        const currentRemaining = Math.max(0, shotClockRemaining - elapsed);
-        setDisplaySecs(currentRemaining);
+        const ceilSec = Math.max(0, Math.ceil(rawRemaining));
 
-        if (currentRemaining <= 0) {
+        // Throttled frame updates: only update state when integer second changes (at most once per second!)
+        if (ceilSec !== lastRenderedCeil) {
+          lastRenderedCeil = ceilSec;
+          setDisplaySecs(rawRemaining);
+        }
+
+        if (rawRemaining <= 0) {
+          setDisplaySecs(0);
           if (!hasExpiredRef.current) {
             hasExpiredRef.current = true;
             if (onExpireRef.current) onExpireRef.current();
@@ -88,6 +100,7 @@ const ShotClock = ({
         animationFrameId = requestAnimationFrame(updateClock);
       } else {
         setDisplaySecs(shotClockRemaining);
+        minDisplayedRef.current = shotClockRemaining;
       }
     };
 
