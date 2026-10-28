@@ -52,7 +52,10 @@ const TournamentDetailsPage = () => {
   const [startingMatchId, setStartingMatchId] = useState(null);
   const [matchForm, setMatchForm] = useState({
     matchName: '',
-    matchType: '3x3',
+    matchType: '5x5',
+    matchStructure: 'QUARTERS', // 'QUARTERS' | 'HALVES' | 'SINGLE'
+    quarterDuration: 600, // in seconds (600 = 10m, 900 = 15m, etc.)
+    shotClock: 24, // 24, 14, 12, or 0 (Off)
     teamA: '',
     teamB: '',
     scheduledDate: new Date().toISOString().split('T')[0],
@@ -167,12 +170,15 @@ const TournamentDetailsPage = () => {
     const defaultName = `Match ${(tournament?.matches?.length || 0) + 1}`;
     setMatchForm({
       matchName: defaultName,
-      matchType: '3x3',
+      matchType: '5x5',
+      matchStructure: 'QUARTERS',
+      quarterDuration: 600,
+      shotClock: 24,
       teamA: teamsList[0]?._id || '',
       teamB: teamsList[1]?._id || '',
       scheduledDate: new Date().toISOString().split('T')[0],
       scheduledTime: '18:00',
-      venue: tournament?.venue || 'Court 1',
+      venue: tournament?.venue || 'Main Court',
     });
     setIsFixMatchModalOpen(true);
   };
@@ -193,6 +199,13 @@ const TournamentDetailsPage = () => {
       await matchApi.create({
         ...matchForm,
         tournamentId: id,
+        settings: {
+          matchStructure: matchForm.matchType === '3x3' ? 'SINGLE' : matchForm.matchStructure,
+          quarterDuration: matchForm.quarterDuration,
+          gameDuration: matchForm.quarterDuration,
+          shotClock: matchForm.shotClock,
+          numberOfQuarters: matchForm.matchStructure === 'HALVES' ? 2 : (matchForm.matchType === '3x3' ? 1 : 4),
+        },
       });
       setToast({ message: 'Match fixture created and scheduled successfully!', type: 'success' });
       setIsFixMatchModalOpen(false);
@@ -523,6 +536,7 @@ const TournamentDetailsPage = () => {
                           </span>
                           <span className="px-2 py-0.5 rounded bg-slate-800/80 text-cyan-400 text-[10px] font-bold border border-cyan-800/40">
                             {m.matchType || '3x3'}
+                            {m.settings?.matchStructure === 'HALVES' ? ' • 2 Halves' : m.matchType === '5x5' ? ' • 4Q' : ''}
                           </span>
                         </div>
 
@@ -912,30 +926,187 @@ const TournamentDetailsPage = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setMatchForm({ ...matchForm, matchType: '3x3' })}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        matchForm.matchType === '3x3'
-                          ? 'border-orange-500 bg-orange-500/10 text-white'
-                          : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <p className="font-bold text-xs text-orange-400">FIBA 3x3</p>
-                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">10 Min | 12s Shot Clock</p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMatchForm({ ...matchForm, matchType: '5x5' })}
+                      onClick={() => setMatchForm({
+                        ...matchForm,
+                        matchType: '5x5',
+                        matchStructure: 'QUARTERS',
+                        quarterDuration: 600,
+                        shotClock: 24,
+                      })}
                       className={`p-3 rounded-xl border text-left transition-all ${
                         matchForm.matchType === '5x5'
                           ? 'border-cyan-500 bg-cyan-500/10 text-white'
                           : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-white'
                       }`}
                     >
-                      <p className="font-bold text-xs text-cyan-400">FIBA 5x5</p>
-                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">4 Quarters | 24s Clock</p>
+                      <p className="font-bold text-xs text-cyan-400">FIBA 5x5 Full Court</p>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">Quarters or Halves | 24s Clock</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMatchForm({
+                        ...matchForm,
+                        matchType: '3x3',
+                        matchStructure: 'SINGLE',
+                        quarterDuration: 600,
+                        shotClock: 12,
+                      })}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        matchForm.matchType === '3x3'
+                          ? 'border-orange-500 bg-orange-500/10 text-white'
+                          : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <p className="font-bold text-xs text-orange-400">FIBA 3x3 Half Court</p>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">1 Period (10:00) | 12s Clock</p>
                     </button>
                   </div>
                 </div>
+
+                {/* Timing & Structure Configuration */}
+                {matchForm.matchType === '5x5' && (
+                  <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                          Game Structure
+                        </label>
+                        <span className="text-[11px] font-mono font-bold text-cyan-400">
+                          {matchForm.matchStructure === 'HALVES' ? '2 Halves' : '4 Quarters'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMatchForm({
+                            ...matchForm,
+                            matchStructure: 'QUARTERS',
+                            quarterDuration: matchForm.quarterDuration === 900 ? 600 : matchForm.quarterDuration,
+                          })}
+                          className={`py-2 px-3 rounded-xl text-xs font-mono font-bold border transition-all ${
+                            matchForm.matchStructure === 'QUARTERS'
+                              ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          4 Quarters (FIBA)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMatchForm({
+                            ...matchForm,
+                            matchStructure: 'HALVES',
+                            quarterDuration: 900, // 15 min default for college halves
+                          })}
+                          className={`py-2 px-3 rounded-xl text-xs font-mono font-bold border transition-all ${
+                            matchForm.matchStructure === 'HALVES'
+                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                          }`}
+                        >
+                          2 Halves (College)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                          {matchForm.matchStructure === 'HALVES' ? 'Duration per Half' : 'Duration per Quarter'}
+                        </label>
+                        <span className="text-[11px] font-mono font-bold text-white">
+                          {Math.floor(matchForm.quarterDuration / 60)}:00 Mins
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(matchForm.matchStructure === 'HALVES'
+                          ? [
+                              { label: '10 Min', val: 600 },
+                              { label: '15 Min', val: 900 },
+                              { label: '20 Min', val: 1200 },
+                              { label: '25 Min', val: 1500 },
+                            ]
+                          : [
+                              { label: '5 Min', val: 300 },
+                              { label: '8 Min', val: 480 },
+                              { label: '10 Min', val: 600 },
+                              { label: '12 Min', val: 720 },
+                            ]
+                        ).map((opt) => (
+                          <button
+                            key={opt.val}
+                            type="button"
+                            onClick={() => setMatchForm({ ...matchForm, quarterDuration: opt.val })}
+                            className={`py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              matchForm.quarterDuration === opt.val
+                                ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                          Shot Clock
+                        </label>
+                        <span className="text-[11px] font-mono font-bold text-amber-400">
+                          {matchForm.shotClock === 0 ? 'Disabled (OFF)' : `${matchForm.shotClock} Seconds`}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { label: '24 Seconds', val: 24 },
+                          { label: '14 Seconds', val: 14 },
+                          { label: 'Off / None', val: 0 },
+                        ].map((sc) => (
+                          <button
+                            key={sc.val}
+                            type="button"
+                            onClick={() => setMatchForm({ ...matchForm, shotClock: sc.val })}
+                            className={`py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              matchForm.shotClock === sc.val
+                                ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40'
+                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                            }`}
+                          >
+                            {sc.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {matchForm.matchType === '3x3' && (
+                  <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-400">FIBA 3x3 Duration:</span>
+                    <div className="flex items-center gap-2">
+                      {[
+                        { label: '8m', val: 480 },
+                        { label: '10m (Official)', val: 600 },
+                        { label: '12m', val: 720 },
+                      ].map((dur) => (
+                        <button
+                          key={dur.val}
+                          type="button"
+                          onClick={() => setMatchForm({ ...matchForm, quarterDuration: dur.val })}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                            matchForm.quarterDuration === dur.val
+                              ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                              : 'bg-slate-900 text-slate-400 border-slate-800'
+                          }`}
+                        >
+                          {dur.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>

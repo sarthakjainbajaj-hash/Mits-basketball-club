@@ -8,6 +8,7 @@ const SubstitutionModal = ({
   starters = [],
   substitutes = [],
   onSubstitute = null,
+  onOpenAddPlayer = null,
   onClose = null,
 }) => {
   const [selectedOut, setSelectedOut] = useState(null);
@@ -143,12 +144,40 @@ const SubstitutionModal = ({
               <span className="text-xs font-mono font-bold uppercase text-emerald-400">
                 2. Select Incoming (Bench)
               </span>
-              <span className="text-[10px] font-mono text-slate-500">{substitutes.length} bench</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-slate-500">{substitutes.length} bench</span>
+                {onOpenAddPlayer && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onClose) onClose();
+                      onOpenAddPlayer(team);
+                    }}
+                    className="text-[10px] font-mono text-amber-400 hover:text-amber-300 font-bold bg-amber-950/50 hover:bg-amber-900/60 border border-amber-700/60 px-2 py-0.5 rounded transition-all"
+                  >
+                    + Add New
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
               {substitutes.length === 0 ? (
-                <p className="text-xs text-slate-500 py-4 text-center">No bench substitutes available</p>
+                <div className="text-center py-6 px-3 bg-slate-950/40 rounded-xl border border-dashed border-slate-800 space-y-2">
+                  <p className="text-xs text-slate-500">No bench substitutes available</p>
+                  {onOpenAddPlayer && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onClose) onClose();
+                        onOpenAddPlayer(team);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shadow-md transition-all inline-block"
+                    >
+                      + Add Player to Bench
+                    </button>
+                  )}
+                </div>
               ) : (
                 substitutes.map((item) => {
                   const pId = item.player?._id || item.player;

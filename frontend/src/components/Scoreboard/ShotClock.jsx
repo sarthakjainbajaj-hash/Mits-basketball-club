@@ -7,6 +7,7 @@ const ShotClock = ({
   shotClockStartedAt = null,
   serverTime = null,
   matchType = '3x3', // '3x3' or '5x5'
+  disabled = false,
   onReset12 = null,
   onReset2 = null,
   onResetFull = null,
@@ -19,6 +20,21 @@ const ShotClock = ({
   const [displaySecs, setDisplaySecs] = useState(shotClockRemaining);
   const onExpireRef = useRef(onExpire);
   const hasExpiredRef = useRef(false);
+
+  if (disabled) {
+    return (
+      <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-black/50 border border-slate-800 shadow-xl opacity-75">
+        <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-slate-600" />
+          SHOT CLOCK (OFF)
+        </div>
+        <div className={`font-digital font-black tracking-[0.14em] pl-1 select-none leading-none text-slate-600 ${large ? 'text-6xl sm:text-8xl' : 'text-5xl sm:text-7xl'}`}>
+          --
+        </div>
+        <p className="text-[10px] text-slate-500 font-mono mt-1">Shot clock disabled</p>
+      </div>
+    );
+  }
 
   useEffect(() => {
     onExpireRef.current = onExpire;

@@ -34,6 +34,9 @@ import {
   Keyboard,
   X,
   Zap,
+  Clock,
+  UserPlus,
+  Edit3,
 } from 'lucide-react';
 
 const LiveScoreboardPage = () => {
@@ -60,6 +63,22 @@ const LiveScoreboardPage = () => {
   const [subModal, setSubModal] = useState({
     isOpen: false,
     team: 'A',
+  });
+
+  // Manual Clock Adjustment Modal State
+  const [showEditClockModal, setShowEditClockModal] = useState(false);
+  const [editClockMinutes, setEditClockMinutes] = useState(10);
+  const [editClockSeconds, setEditClockSeconds] = useState(0);
+  const [editShotClock, setEditShotClock] = useState(24);
+
+  // Mid-Game Player Add / Emergency Replacement Modal State
+  const [addPlayerModal, setAddPlayerModal] = useState({
+    isOpen: false,
+    team: 'A',
+    name: '',
+    jerseyNumber: '',
+    position: 'G',
+    replacePlayerId: '', // '' = Add to bench, or existing starter ID to replace immediately
   });
 
   // Timeout Clock State (1 Min / 2 Min changable duration countdown)
@@ -363,6 +382,77 @@ const LiveScoreboardPage = () => {
       if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
     } catch (err) {
       setToast({ message: err.message, type: 'error' });
+      fetchMatch();
+    }
+  };
+
+  // Open Edit Clock Modal with accurate current remaining seconds
+  const handleOpenEditClockModal = () => {
+    const now = Date.now();
+    let currentSecs = match?.remainingTime ?? 600;
+    if (match?.timerRunning && match?.timerStartedAt) {
+      const elapsed = (now - match.timerStartedAt) / 1000;
+      currentSecs = Math.max(0, Math.round(match.remainingTime - elapsed));
+    }
+    const mins = Math.floor(currentSecs / 60);
+    const secs = Math.floor(currentSecs % 60);
+    setEditClockMinutes(mins);
+    setEditClockSeconds(secs);
+
+    let scSecs = match?.shotClockRemaining ?? (match?.matchType === '5x5' ? 24 : 12);
+    if (match?.shotClockRunning && match?.shotClockStartedAt) {
+      const scElapsed = (now - match.shotClockStartedAt) / 1000;
+      scSecs = Math.max(0, Math.round(match.shotClockRemaining - scElapsed));
+    }
+    setEditShotClock(scSecs);
+    setShowEditClockModal(true);
+  };
+
+  // Save Custom Game Clock & Shot Clock
+  const handleSaveCustomClock = async () => {
+    const mins = parseInt(editClockMinutes || 0, 10);
+    const secs = parseInt(editClockSeconds || 0, 10);
+    const totalSecs = Math.max(0, mins * 60 + secs);
+    const scSecs = Math.max(0, parseInt(editShotClock || 0, 10));
+
+    setShowEditClockModal(false);
+    playClick();
+
+    // 0ms Optimistic Update
+    setMatch((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        remainingTime: totalSecs,
+        shotClockRemaining: scSecs,
+        timerRunning: false,
+        timerStartedAt: null,
+        shotClockRunning: false,
+        shotClockStartedAt: null,
+      };
+    });
+    setToast({
+      message: `Clock set to ${mins}:${secs.toString().padStart(2, '0')}${match?.settings?.shotClock !== 0 ? ` (Shot Clock: ${scSecs}s)` : ''}`,
+      type: 'success',
+    });
+
+    try {
+      const res = await matchApi.setTime(id, {
+        remainingTime: totalSecs,
+        shotClockRemaining: scSecs,
+      });
+      if (res?.data) {
+        setMatch((prev) => mergeMatchState(prev, res.data, {
+          remainingTime: totalSecs,
+          shotClockRemaining: scSecs,
+          timerRunning: false,
+          timerStartedAt: null,
+          shotClockRunning: false,
+          shotClockStartedAt: null,
+        }));
+      }
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to update clock', type: 'error' });
       fetchMatch();
     }
   };
@@ -681,16 +771,72 @@ const LiveScoreboardPage = () => {
     }
   };
 
-  // Period / Quarter Controls for 5x5
+  // Mid-Game Player Add / Emergency Replacement Handler
+  const handleAddOrReplacePlayerSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!addPlayerModal.name?.trim()) {
+      setToast({ message: 'Player name is required', type: 'warning' });
+      return;
+    }
+    if (!addPlayerModal.jerseyNumber) {
+      setToast({ message: 'Jersey number is required', type: 'warning' });
+      return;
+    }
+
+    playClick();
+    const payload = {
+      team: addPlayerModal.team,
+      name: addPlayerModal.name.trim(),
+      jerseyNumber: Number(addPlayerModal.jerseyNumber),
+      position: addPlayerModal.position,
+      replacePlayerId: addPlayerModal.replacePlayerId || null,
+    };
+
+    try {
+      const res = await matchApi.addOrReplacePlayer(id, payload);
+      if (res?.data) {
+        setMatch((prev) => mergeMatchState(prev, res.data));
+      } else {
+        await fetchMatch();
+      }
+      setToast({
+        message: payload.replacePlayerId
+          ? `Player added & substituted directly onto court!`
+          : `New player added to Team ${payload.team} bench!`,
+        type: 'success',
+      });
+      setAddPlayerModal({
+        isOpen: false,
+        team: 'A',
+        name: '',
+        jerseyNumber: '',
+        position: 'G',
+        replacePlayerId: '',
+      });
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to add/replace player', type: 'error' });
+    }
+  };
+
+  // Period / Quarter Controls for 5x5 (Supports 4 Quarters and 2 Halves)
+  const isHalvesMatch = match?.settings?.matchStructure === 'HALVES' || match?.currentPeriod?.startsWith('H');
+  const periodTypeName = isHalvesMatch ? 'Half' : 'Quarter';
+
   const handleEndQuarter = async () => {
-    if (!window.confirm(`End current period (${match.currentPeriod || 'Quarter'})?`)) return;
+    const currentLabel = match.currentPeriod === 'H1'
+      ? '1st Half'
+      : match.currentPeriod === 'H2'
+      ? '2nd Half'
+      : (match.currentPeriod || periodTypeName);
+
+    if (!window.confirm(`End current ${periodTypeName.toLowerCase()} (${currentLabel})?`)) return;
     try {
       playGameEndHorn();
       const res = await matchApi.controlPeriod(id, { action: 'END_QUARTER' });
       if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
-      setToast({ message: `${match.currentPeriod || 'Quarter'} officially ended`, type: 'info' });
+      setToast({ message: `${currentLabel} officially ended`, type: 'info' });
     } catch (err) {
-      setToast({ message: err.message || 'Failed to end quarter', type: 'error' });
+      setToast({ message: err.message || `Failed to end ${periodTypeName.toLowerCase()}`, type: 'error' });
     }
   };
 
@@ -699,9 +845,9 @@ const LiveScoreboardPage = () => {
       playClick();
       const res = await matchApi.controlPeriod(id, { action: 'NEXT_QUARTER' });
       if (res?.data) setMatch((prev) => mergeMatchState(prev, res.data));
-      setToast({ message: `Advanced to ${res.data?.currentPeriod}! Timer & fouls reset.`, type: 'success' });
+      setToast({ message: `Advanced to ${res.data?.currentPeriod || 'next period'}! Timer & fouls reset.`, type: 'success' });
     } catch (err) {
-      setToast({ message: err.message || 'Failed to advance quarter', type: 'error' });
+      setToast({ message: err.message || `Failed to advance ${periodTypeName.toLowerCase()}`, type: 'error' });
     }
   };
 
@@ -996,7 +1142,11 @@ const LiveScoreboardPage = () => {
 
               {/* Period Indicator */}
               <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                {match.currentPeriod || (is5x5 ? 'Q1' : 'REGULATION')}
+                {match.currentPeriod === 'H1'
+                  ? 'HALF 1'
+                  : match.currentPeriod === 'H2'
+                  ? 'HALF 2'
+                  : (match.currentPeriod || (is5x5 ? 'Q1' : 'REGULATION'))}
               </span>
 
               <span className="text-xs text-white font-bold truncate max-w-[180px] sm:max-w-none">
@@ -1006,15 +1156,19 @@ const LiveScoreboardPage = () => {
 
             <p className="text-[11px] text-slate-400 font-mono mt-0.5">
               Venue: {match.venue || 'Center Court'} • Shot Clock:{' '}
-              {match.settings?.shotClock || match.shotClockDuration || (is5x5 ? 24 : 12)}s
-              {match.targetScore ? ` • Target: ${match.targetScore} PTS` : ' • 4 Quarters'}
+              {match.settings?.shotClock === 0 ? 'OFF' : `${match.settings?.shotClock || match.shotClockDuration || (is5x5 ? 24 : 12)}s`}
+              {match.targetScore
+                ? ` • Target: ${match.targetScore} PTS`
+                : isHalvesMatch
+                ? ' • 2 Halves'
+                : ' • 4 Quarters'}
             </p>
           </div>
         </div>
 
         {/* Console Action Links */}
         <div className="flex items-center gap-2">
-          {/* Quick Substitution Button for Scorer */}
+          {/* Quick Substitution & Mid-Game Player Add Buttons for Scorer */}
           {isScorer && !isCompleted && (
             <div className="flex items-center gap-1.5">
               <button
@@ -1033,6 +1187,15 @@ const LiveScoreboardPage = () => {
               >
                 <ArrowRightLeft className="w-3.5 h-3.5" />
                 <span>SUB {match.teamB?.shortName || 'B'}</span>
+              </button>
+
+              <button
+                onClick={() => setAddPlayerModal({ isOpen: true, team: 'A', name: '', jerseyNumber: '', position: 'G', replacePlayerId: '' })}
+                className="px-2.5 py-1.5 rounded-xl bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 text-xs font-mono font-bold border border-amber-600/50 flex items-center gap-1.5 transition-all shadow-sm"
+                title="Add new player or replace unavailable court player mid-game"
+              >
+                <UserPlus className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Add/Replace</span>
               </button>
             </div>
           )}
@@ -1249,7 +1412,7 @@ const LiveScoreboardPage = () => {
             <div className="p-4 rounded-3xl bg-black/60 border border-slate-800 shadow-2xl w-full flex flex-col items-center">
               <span className="text-[10px] font-mono uppercase font-bold text-slate-400 tracking-widest mb-1">
                 {is5x5
-                  ? `GAME CLOCK (${match.currentPeriod || 'Q1'})`
+                  ? `GAME CLOCK (${match.currentPeriod === 'H1' ? '1ST HALF' : match.currentPeriod === 'H2' ? '2ND HALF' : (match.currentPeriod || 'Q1')})`
                   : 'GAME CLOCK (FIBA 3X3)'}
               </span>
               <DigitalTimer
@@ -1260,14 +1423,14 @@ const LiveScoreboardPage = () => {
                 onExpire={() => {
                   playGameEndHorn();
                   setToast({
-                    message: is5x5 ? `${match.currentPeriod || 'Quarter'} Time Expired!` : 'REGULATION TIME EXPIRED!',
+                    message: is5x5 ? `${match.currentPeriod === 'H1' ? '1st Half' : match.currentPeriod === 'H2' ? '2nd Half' : (match.currentPeriod || 'Quarter')} Time Expired!` : 'REGULATION TIME EXPIRED!',
                     type: 'warning',
                   });
                 }}
               />
             </div>
 
-            {/* Shot Clock (12s for 3x3, 24s for 5x5) */}
+            {/* Shot Clock (12s for 3x3, 24s for 5x5, or OFF) */}
             <div className="w-full max-w-xs">
               <ShotClock
                 shotClockRemaining={match.shotClockRemaining}
@@ -1275,6 +1438,7 @@ const LiveScoreboardPage = () => {
                 shotClockStartedAt={match.shotClockStartedAt}
                 serverTime={match.serverTime}
                 matchType={match.matchType || '3x3'}
+                disabled={match.settings?.shotClock === 0}
                 onResetFull={() => handleShotClockAction('RESET_FULL')}
                 onResetShort={() => handleShotClockAction('RESET_SHORT')}
                 onReset12={() => handleShotClockAction(is5x5 ? 'RESET_24' : 'RESET_12')}
@@ -1345,22 +1509,30 @@ const LiveScoreboardPage = () => {
                 <RotateCcw className="w-3.5 h-3.5" /> RESET CLOCK
               </button>
 
+              <button
+                onClick={handleOpenEditClockModal}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white font-bold text-xs border border-amber-500/30 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm"
+                title="Manually adjust game clock and shot clock"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-400" /> EDIT CLOCK
+              </button>
+
               {/* 5x5 Period/Quarter Controls */}
               {is5x5 && (
                 <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-800">
                   <button
                     onClick={handleEndQuarter}
                     className="px-3 py-2.5 rounded-xl bg-indigo-950 hover:bg-indigo-900 text-indigo-300 font-mono font-bold text-xs border border-indigo-700/80 active:scale-95 transition-all flex items-center gap-1"
-                    title="End current quarter and store quarter score"
+                    title={isHalvesMatch ? "End current half and store half score" : "End current quarter and store quarter score"}
                   >
-                    <Flag className="w-3.5 h-3.5" /> END QUARTER
+                    <Flag className="w-3.5 h-3.5" /> {isHalvesMatch ? 'END HALF' : 'END QUARTER'}
                   </button>
                   <button
                     onClick={handleNextQuarter}
                     className="px-3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-mono font-bold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1"
-                    title="Advance to next quarter (Q1->Q2->Q3->Q4->OT)"
+                    title={isHalvesMatch ? "Advance to next half (H1->H2->OT)" : "Advance to next quarter (Q1->Q2->Q3->Q4->OT)"}
                   >
-                    <FastForward className="w-3.5 h-3.5" /> NEXT QUARTER
+                    <FastForward className="w-3.5 h-3.5" /> {isHalvesMatch ? 'NEXT HALF' : 'NEXT QUARTER'}
                   </button>
                 </div>
               )}
@@ -1415,8 +1587,353 @@ const LiveScoreboardPage = () => {
         starters={subModal.team === 'A' ? teamAStarters : teamBStarters}
         substitutes={subModal.team === 'A' ? teamASubs : teamBSubs}
         onSubstitute={handlePerformSubstitution}
+        onOpenAddPlayer={(team) => {
+          setSubModal({ isOpen: false, team: 'A' });
+          setAddPlayerModal({
+            isOpen: true,
+            team,
+            name: '',
+            jerseyNumber: '',
+            position: 'G',
+            replacePlayerId: '',
+          });
+        }}
         onClose={() => setSubModal({ isOpen: false, team: 'A' })}
       />
+
+      {/* Manual Clock Adjustment Modal */}
+      {showEditClockModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Adjust Match Clock</h3>
+                  <p className="text-xs text-slate-400 font-mono">Sync referee or arena stopwatches</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEditClockModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Game Clock Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-bold text-slate-300 uppercase">
+                  Game Clock (Minutes : Seconds)
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      min="0"
+                      max="99"
+                      value={editClockMinutes}
+                      onChange={(e) => setEditClockMinutes(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-center font-digital text-2xl font-bold text-amber-400 focus:outline-none focus:border-amber-500"
+                      placeholder="MM"
+                    />
+                    <span className="block text-[10px] text-center text-slate-500 font-mono mt-1">MINUTES</span>
+                  </div>
+                  <span className="text-2xl font-digital text-amber-400">:</span>
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={editClockSeconds}
+                      onChange={(e) => setEditClockSeconds(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-center font-digital text-2xl font-bold text-amber-400 focus:outline-none focus:border-amber-500"
+                      placeholder="SS"
+                    />
+                    <span className="block text-[10px] text-center text-slate-500 font-mono mt-1">SECONDS</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono text-slate-400 uppercase">Quick Period Presets</span>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { label: '20:00', m: 20, s: 0 },
+                    { label: '15:00', m: 15, s: 0 },
+                    { label: '10:00', m: 10, s: 0 },
+                    { label: '08:00', m: 8, s: 0 },
+                    { label: '05:00', m: 5, s: 0 },
+                    { label: '02:00', m: 2, s: 0 },
+                    { label: '01:00', m: 1, s: 0 },
+                    { label: '00:30', m: 0, s: 30 },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => {
+                        setEditClockMinutes(p.m);
+                        setEditClockSeconds(p.s);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono font-bold text-slate-300 border border-slate-700 transition-colors"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Shot Clock Input */}
+              {match.settings?.shotClock !== 0 && (
+                <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-mono font-bold text-slate-300 uppercase">
+                      Shot Clock (Seconds)
+                    </label>
+                    <span className="text-[10px] font-mono text-cyan-400">Current setting</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="60"
+                      value={editShotClock}
+                      onChange={(e) => setEditShotClock(e.target.value)}
+                      className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-center font-digital text-2xl font-bold text-cyan-400 focus:outline-none focus:border-cyan-500"
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setEditShotClock(24)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 border border-slate-700"
+                      >
+                        24s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditShotClock(14)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 border border-slate-700"
+                      >
+                        14s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditShotClock(12)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 border border-slate-700"
+                      >
+                        12s
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEditClockModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCustomClock}
+                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 transition-all flex items-center gap-1.5"
+              >
+                <CheckCircle className="w-4 h-4" /> Save Clock
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mid-Game Player Add / Emergency Replacement Modal */}
+      {addPlayerModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Add / Replace Player Mid-Game</h3>
+                  <p className="text-xs text-slate-400 font-mono">College match on-the-fly roster adjustment</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAddPlayerModal((prev) => ({ ...prev, isOpen: false }))}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddOrReplacePlayerSubmit} className="p-5 space-y-4">
+              {/* Team Selector */}
+              <div>
+                <label className="text-xs font-mono font-bold text-slate-300 uppercase block mb-1.5">
+                  Select Team
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddPlayerModal((prev) => ({ ...prev, team: 'A', replacePlayerId: '' }))}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      addPlayerModal.team === 'A'
+                        ? 'bg-orange-500/20 border-orange-500 text-orange-300 ring-2 ring-orange-500/30'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>{match.teamA?.name || 'Team A'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddPlayerModal((prev) => ({ ...prev, team: 'B', replacePlayerId: '' }))}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      addPlayerModal.team === 'B'
+                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 ring-2 ring-cyan-500/30'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span>{match.teamB?.name || 'Team B'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Player Name and Jersey */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-mono font-bold text-slate-300 uppercase block mb-1">
+                    Player Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={addPlayerModal.name}
+                    onChange={(e) => setAddPlayerModal((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g. Rahul Sharma"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-mono font-bold text-slate-300 uppercase block mb-1">
+                    Jersey # *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="99"
+                    required
+                    value={addPlayerModal.jerseyNumber}
+                    onChange={(e) => setAddPlayerModal((prev) => ({ ...prev, jerseyNumber: e.target.value }))}
+                    placeholder="23"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-digital text-amber-400 text-center font-bold focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* Position */}
+              <div>
+                <label className="text-xs font-mono font-bold text-slate-300 uppercase block mb-1">
+                  Position
+                </label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {['PG', 'SG', 'SF', 'PF', 'C'].map((pos) => (
+                    <button
+                      key={pos}
+                      type="button"
+                      onClick={() => setAddPlayerModal((prev) => ({ ...prev, position: pos }))}
+                      className={`py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                        addPlayerModal.position === pos
+                          ? 'bg-orange-600 border-orange-500 text-white'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      {pos}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* On-Court Replacement Option */}
+              <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                <label className="text-xs font-mono font-bold text-slate-300 uppercase block">
+                  Action on Match Entry
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="replaceOption"
+                      checked={!addPlayerModal.replacePlayerId}
+                      onChange={() => setAddPlayerModal((prev) => ({ ...prev, replacePlayerId: '' }))}
+                      className="text-orange-500 focus:ring-0"
+                    />
+                    <span>Add to bench as substitute (available for normal sub)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 text-xs text-amber-400 font-bold cursor-pointer">
+                    <input
+                      type="radio"
+                      name="replaceOption"
+                      checked={Boolean(addPlayerModal.replacePlayerId)}
+                      onChange={() => {
+                        const starters = addPlayerModal.team === 'A' ? teamAStarters : teamBStarters;
+                        const firstStarterId = starters?.[0]?.player?._id || starters?.[0]?.player || '';
+                        setAddPlayerModal((prev) => ({ ...prev, replacePlayerId: firstStarterId }));
+                      }}
+                      className="text-orange-500 focus:ring-0"
+                    />
+                    <span>Emergency Replace missing/injured player currently on court</span>
+                  </label>
+
+                  {Boolean(addPlayerModal.replacePlayerId) && (
+                    <div className="pl-6 pt-1">
+                      <select
+                        value={addPlayerModal.replacePlayerId}
+                        onChange={(e) => setAddPlayerModal((prev) => ({ ...prev, replacePlayerId: e.target.value }))}
+                        className="w-full bg-slate-900 border border-amber-500/50 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none"
+                      >
+                        {(addPlayerModal.team === 'A' ? teamAStarters : teamBStarters).map((starter) => {
+                          const pId = starter.player?._id || starter.player;
+                          return (
+                            <option key={pId} value={pId}>
+                              Replace #{starter.jerseyNumber} {starter.name} ({starter.position || 'Court'})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAddPlayerModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-bold text-xs shadow-lg shadow-orange-600/30 transition-all flex items-center gap-1.5"
+                >
+                  <UserPlus className="w-4 h-4" /> Add & Register Player
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Scorer Keyboard Shortcuts Cheat Sheet Modal */}
       {showHotkeysModal && (

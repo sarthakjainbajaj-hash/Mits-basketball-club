@@ -143,12 +143,13 @@ const matchSchema = new mongoose.Schema(
 
     // Match Rules & Format Settings
     settings: {
+      matchStructure: { type: String, enum: ['QUARTERS', 'HALVES', 'SINGLE'], default: 'QUARTERS' },
       gameDuration: { type: Number, default: 600 },
-      shotClock: { type: Number, default: 12 },
-      targetScore: { type: Number, default: 21 },
-      numberOfQuarters: { type: Number, default: 1 },
+      shotClock: { type: Number, default: 24 }, // 24, 14, 12, or 0 (disabled)
+      targetScore: { type: Number, default: 0 },
+      numberOfQuarters: { type: Number, default: 4 }, // 4 for Quarters, 2 for Halves, 1 for Single
       quarterDuration: { type: Number, default: 600 },
-      foulLimit: { type: Number, default: 7 },
+      foulLimit: { type: Number, default: 5 },
       timeoutDuration: { type: Number, default: 60 }, // 30, 60 (1 min), 120 (2 min)
     },
 

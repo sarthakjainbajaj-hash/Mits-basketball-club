@@ -22,6 +22,9 @@ const {
   controlPeriod,
   undoLastAction,
   endMatch,
+  setTime,
+  addOrReplacePlayer,
+  syncMatchRosters,
 } = require('../controllers/liveMatchController');
 const { protect } = require('../middleware/auth');
 const { authorize } = require('../middleware/role');
@@ -43,6 +46,7 @@ router.post('/:id/start', protect, authorize('admin', 'scorer'), startMatch);
 router.post('/:id/pause', protect, authorize('admin', 'scorer'), pauseMatch);
 router.post('/:id/resume', protect, authorize('admin', 'scorer'), startMatch);
 router.post('/:id/reset-timer', protect, authorize('admin', 'scorer'), resetTimer);
+router.post('/:id/set-time', protect, authorize('admin', 'scorer'), setTime);
 router.post('/:id/shot-clock', protect, authorize('admin', 'scorer'), controlShotClock);
 router.post('/:id/score', protect, authorize('admin', 'scorer'), updateScore);
 router.post('/:id/foul', protect, authorize('admin', 'scorer'), recordFoul);
@@ -51,6 +55,8 @@ router.post('/:id/timeout', protect, authorize('admin', 'scorer'), callTimeout);
 router.post('/:id/player-stats', protect, authorize('admin', 'scorer'), recordPlayerStat);
 router.post('/:id/substitute', protect, authorize('admin', 'scorer'), substitutePlayer);
 router.post('/:id/period', protect, authorize('admin', 'scorer'), controlPeriod);
+router.post('/:id/players/add-replace', protect, authorize('admin', 'scorer'), addOrReplacePlayer);
+router.post('/:id/sync-rosters', protect, authorize('admin', 'scorer'), syncMatchRosters);
 router.post('/:id/undo', protect, authorize('admin', 'scorer'), undoLastAction);
 router.post('/:id/end', protect, authorize('admin', 'scorer'), endMatch);
 

@@ -78,6 +78,91 @@ const getMatchById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Match not found' });
     }
 
+    // Auto-sync newly registered players from team directory for SCHEDULED matches
+    if (match.status === 'SCHEDULED' && match.teamA && match.teamB) {
+      try {
+        const teamAId = match.teamA._id || match.teamA;
+        const teamBId = match.teamB._id || match.teamB;
+        const [teamAPlayers, teamBPlayers] = await Promise.all([
+          Player.find({ teamId: teamAId }),
+          Player.find({ teamId: teamBId }),
+        ]);
+
+        let modified = false;
+        const starterAIds = (match.teamA_roster?.starters || []).map((p) => (p.player?._id || p.player || '').toString());
+        const subAIds = (match.teamA_roster?.substitutes || []).map((p) => (p.player?._id || p.player || '').toString());
+        for (const p of teamAPlayers) {
+          const pid = p._id.toString();
+          if (!starterAIds.includes(pid) && !subAIds.includes(pid)) {
+            match.teamA_roster.substitutes.push({
+              player: p._id,
+              name: p.name,
+              jerseyNumber: p.jerseyNumber,
+              position: p.position || 'Guard',
+            });
+            match.playersA.push({
+              player: p._id,
+              name: p.name,
+              jerseyNumber: p.jerseyNumber,
+              position: p.position || 'Guard',
+            });
+            if (!match.playerStats.some((s) => (s.playerId?._id || s.playerId || '').toString() === pid)) {
+              match.playerStats.push({
+                playerId: p._id,
+                playerName: p.name,
+                jerseyNumber: p.jerseyNumber,
+                teamId: teamAId,
+                team: 'A',
+                isStarter: false,
+                isActive: false,
+                points: 0, onePoints: 0, twoPoints: 0, threePoints: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0,
+              });
+            }
+            modified = true;
+          }
+        }
+
+        const starterBIds = (match.teamB_roster?.starters || []).map((p) => (p.player?._id || p.player || '').toString());
+        const subBIds = (match.teamB_roster?.substitutes || []).map((p) => (p.player?._id || p.player || '').toString());
+        for (const p of teamBPlayers) {
+          const pid = p._id.toString();
+          if (!starterBIds.includes(pid) && !subBIds.includes(pid)) {
+            match.teamB_roster.substitutes.push({
+              player: p._id,
+              name: p.name,
+              jerseyNumber: p.jerseyNumber,
+              position: p.position || 'Guard',
+            });
+            match.playersB.push({
+              player: p._id,
+              name: p.name,
+              jerseyNumber: p.jerseyNumber,
+              position: p.position || 'Guard',
+            });
+            if (!match.playerStats.some((s) => (s.playerId?._id || s.playerId || '').toString() === pid)) {
+              match.playerStats.push({
+                playerId: p._id,
+                playerName: p.name,
+                jerseyNumber: p.jerseyNumber,
+                teamId: teamBId,
+                team: 'B',
+                isStarter: false,
+                isActive: false,
+                points: 0, onePoints: 0, twoPoints: 0, threePoints: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0,
+              });
+            }
+            modified = true;
+          }
+        }
+
+        if (modified) {
+          await match.save();
+        }
+      } catch (syncErr) {
+        console.error('Non-blocking roster auto-sync error in getMatchById:', syncErr);
+      }
+    }
+
     const events = await MatchEvent.find({ matchId: match._id }).sort({ timestamp: 1 });
 
     const responseData = match.toObject();
@@ -135,16 +220,14 @@ const createMatch = async (req, res) => {
     let finalBSubs = [...teamB_substitutes];
 
     const reqStarters = matchType === '3x3' ? 3 : 5;
-    const maxSubs = matchType === '3x3' ? 2 : 7;
 
     // Auto-resolve rosters from team registered players if not explicitly passed (e.g. tournament match fixture)
     if (finalAStarters.length === 0) {
       let teamAPlayers = await Player.find({ teamId: teamA });
-      const minNeededA = reqStarters + 1;
-      if (teamAPlayers.length < minNeededA) {
+      if (teamAPlayers.length < reqStarters) {
         const teamObj = await Team.findById(teamA);
         const tName = teamObj ? teamObj.name : 'Team A';
-        const needed = minNeededA - teamAPlayers.length;
+        const needed = reqStarters - teamAPlayers.length;
         for (let i = 1; i <= needed; i++) {
           const np = await Player.create({
             teamId: teamA,
@@ -156,16 +239,15 @@ const createMatch = async (req, res) => {
         }
       }
       finalAStarters = teamAPlayers.slice(0, reqStarters).map((p) => p._id);
-      finalASubs = teamAPlayers.slice(reqStarters, reqStarters + maxSubs).map((p) => p._id);
+      finalASubs = teamAPlayers.slice(reqStarters).map((p) => p._id);
     }
 
     if (finalBStarters.length === 0) {
       let teamBPlayers = await Player.find({ teamId: teamB });
-      const minNeededB = reqStarters + 1;
-      if (teamBPlayers.length < minNeededB) {
+      if (teamBPlayers.length < reqStarters) {
         const teamObj = await Team.findById(teamB);
         const tName = teamObj ? teamObj.name : 'Team B';
-        const needed = minNeededB - teamBPlayers.length;
+        const needed = reqStarters - teamBPlayers.length;
         for (let i = 1; i <= needed; i++) {
           const np = await Player.create({
             teamId: teamB,
@@ -177,36 +259,34 @@ const createMatch = async (req, res) => {
         }
       }
       finalBStarters = teamBPlayers.slice(0, reqStarters).map((p) => p._id);
-      finalBSubs = teamBPlayers.slice(reqStarters, reqStarters + maxSubs).map((p) => p._id);
+      finalBSubs = teamBPlayers.slice(reqStarters).map((p) => p._id);
     }
 
-    // Official Roster Validation
+    // Official Roster Validation: Require starters only. Substitutes have NO restriction (0 to any number)!
     if (matchType === '3x3') {
-      if (finalAStarters.length !== 3 || finalASubs.length < 1 || finalASubs.length > 2) {
+      if (finalAStarters.length !== 3) {
         return res.status(400).json({
           success: false,
-          message: '3x3 requires 3 starting players and 1 or 2 substitutes (minimum 4 players) for Team A.',
+          message: '3x3 requires 3 starting players for Team A.',
         });
       }
-
-      if (finalBStarters.length !== 3 || finalBSubs.length < 1 || finalBSubs.length > 2) {
+      if (finalBStarters.length !== 3) {
         return res.status(400).json({
           success: false,
-          message: '3x3 requires 3 starting players and 1 or 2 substitutes (minimum 4 players) for Team B.',
+          message: '3x3 requires 3 starting players for Team B.',
         });
       }
     } else {
-      if (finalAStarters.length !== 5 || finalASubs.length < 1 || finalASubs.length > 7) {
+      if (finalAStarters.length !== 5) {
         return res.status(400).json({
           success: false,
-          message: '5x5 requires 5 starting players and 1 to 7 substitutes (minimum 6 players) for Team A.',
+          message: '5x5 requires 5 starting players for Team A.',
         });
       }
-
-      if (finalBStarters.length !== 5 || finalBSubs.length < 1 || finalBSubs.length > 7) {
+      if (finalBStarters.length !== 5) {
         return res.status(400).json({
           success: false,
-          message: '5x5 requires 5 starting players and 1 to 7 substitutes (minimum 6 players) for Team B.',
+          message: '5x5 requires 5 starting players for Team B.',
         });
       }
     }
@@ -310,18 +390,23 @@ const createMatch = async (req, res) => {
       })),
     ];
 
-    // Compute format-dependent settings
+    // Compute format-dependent settings (Quarters vs Halves, timing, shot clock)
+    const matchStructure = settings.matchStructure || (matchType === '5x5' ? 'QUARTERS' : 'SINGLE');
+    const quarterDuration = Number(settings.quarterDuration) || Number(settings.gameDuration) || (matchType === '3x3' ? 600 : (matchStructure === 'HALVES' ? 900 : 600));
+    const shotClock = settings.shotClock !== undefined ? Number(settings.shotClock) : (matchType === '3x3' ? 12 : 24);
+
     const matchSettings = {
-      gameDuration: settings.gameDuration || (matchType === '3x3' ? 600 : 600),
-      shotClock: settings.shotClock || (matchType === '3x3' ? 12 : 24),
+      matchStructure,
+      gameDuration: quarterDuration,
+      shotClock,
       targetScore: settings.targetScore !== undefined ? settings.targetScore : matchType === '3x3' ? 21 : 0,
-      numberOfQuarters: settings.numberOfQuarters || (matchType === '3x3' ? 1 : 4),
-      quarterDuration: settings.quarterDuration || (matchType === '3x3' ? 600 : 600),
+      numberOfQuarters: matchStructure === 'HALVES' ? 2 : (matchType === '3x3' ? 1 : 4),
+      quarterDuration,
       foulLimit: settings.foulLimit || (matchType === '3x3' ? 7 : 5),
       timeoutDuration: Number(settings.timeoutDuration) || 60,
     };
 
-    const initialPeriod = matchType === '3x3' ? 'REGULATION' : 'Q1';
+    const initialPeriod = matchType === '3x3' ? 'REGULATION' : (matchStructure === 'HALVES' ? 'H1' : 'Q1');
 
     const match = await Match.create({
       matchType,
@@ -374,16 +459,40 @@ const createMatch = async (req, res) => {
 // @access  Private/Admin or Scorer
 const updateMatch = async (req, res) => {
   try {
+    const matchToUpdate = await Match.findById(req.params.id);
+    if (!matchToUpdate) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+
+    // If match is still scheduled, sync remainingTime if quarterDuration or gameDuration is updated
+    if (matchToUpdate.status === 'SCHEDULED') {
+      const qDur = req.body['settings.quarterDuration'] || req.body.settings?.quarterDuration || req.body.gameDuration || req.body.quarterDuration;
+      if (qDur && !isNaN(Number(qDur))) {
+        req.body.remainingTime = Number(qDur);
+        req.body.gameDuration = Number(qDur);
+      }
+      const sClock = req.body['settings.shotClock'] || req.body.settings?.shotClock || req.body.shotClock;
+      if (sClock !== undefined && !isNaN(Number(sClock))) {
+        req.body.shotClockRemaining = Number(sClock);
+        req.body.shotClockDuration = Number(sClock);
+      }
+      const struct = req.body['settings.matchStructure'] || req.body.settings?.matchStructure || req.body.matchStructure;
+      if (struct === 'HALVES' && matchToUpdate.currentPeriod === 'Q1') {
+        req.body.currentPeriod = 'H1';
+        if (req.body.periodScores && req.body.periodScores[0]) {
+          req.body.periodScores[0].period = 'H1';
+        }
+      } else if (struct === 'QUARTERS' && matchToUpdate.currentPeriod === 'H1') {
+        req.body.currentPeriod = 'Q1';
+      }
+    }
+
     const match = await Match.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     })
       .populate('teamA', 'name shortName logo primaryColor')
       .populate('teamB', 'name shortName logo primaryColor');
-
-    if (!match) {
-      return res.status(404).json({ success: false, message: 'Match not found' });
-    }
 
     res.status(200).json({ success: true, data: match });
   } catch (error) {

@@ -16,6 +16,12 @@ import {
   Award,
   Zap,
   Trash2,
+  RefreshCw,
+  UserPlus,
+  Plus,
+  Sliders,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -29,6 +35,24 @@ const MatchSetupPage = () => {
   const [timeoutDuration, setTimeoutDuration] = useState(60);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Timing & Structure local state
+  const [matchStructure, setMatchStructure] = useState('QUARTERS'); // 'QUARTERS' | 'HALVES' | 'SINGLE'
+  const [quarterDuration, setQuarterDuration] = useState(600);
+  const [shotClock, setShotClock] = useState(24);
+
+  // Add / Replace Player Modal State
+  const [playerModal, setPlayerModal] = useState({
+    isOpen: false,
+    team: 'A',
+    name: '',
+    jerseyNumber: '',
+    position: 'Guard',
+    replacePlayerId: '',
+    asStarter: false,
+  });
+  const [isAddingPlayer, setIsAddingPlayer] = useState(false);
 
   useEffect(() => {
     fetchMatch();
@@ -45,6 +69,11 @@ const MatchSetupPage = () => {
       }
       if (matchData?.timeoutDuration || matchData?.settings?.timeoutDuration) {
         setTimeoutDuration(matchData.timeoutDuration || matchData.settings?.timeoutDuration || 60);
+      }
+      if (matchData?.settings) {
+        setMatchStructure(matchData.settings.matchStructure || (matchData.matchType === '5x5' ? 'QUARTERS' : 'SINGLE'));
+        setQuarterDuration(matchData.settings.quarterDuration || matchData.gameDuration || 600);
+        setShotClock(matchData.settings.shotClock !== undefined ? matchData.settings.shotClock : (matchData.matchType === '5x5' ? 24 : 12));
       }
     } catch (err) {
       setToast({ message: 'Error loading match setup: ' + err.message, type: 'error' });
@@ -69,12 +98,99 @@ const MatchSetupPage = () => {
     }
   };
 
+  // Update Game Structure / Period Duration / Shot Clock
+  const handleUpdateTiming = async (newStructure, newDuration, newShotClock) => {
+    const updatedStructure = newStructure ?? matchStructure;
+    const updatedDuration = newDuration ?? quarterDuration;
+    const updatedShotClock = newShotClock ?? shotClock;
+
+    setMatchStructure(updatedStructure);
+    setQuarterDuration(updatedDuration);
+    setShotClock(updatedShotClock);
+
+    try {
+      await matchApi.update(id, {
+        'settings.matchStructure': updatedStructure,
+        'settings.quarterDuration': updatedDuration,
+        'settings.gameDuration': updatedDuration,
+        'settings.shotClock': updatedShotClock,
+        'settings.numberOfQuarters': updatedStructure === 'HALVES' ? 2 : (match?.matchType === '3x3' ? 1 : 4),
+        currentPeriod: updatedStructure === 'HALVES' ? 'H1' : (match?.matchType === '3x3' ? 'REGULATION' : 'Q1'),
+        remainingTime: updatedDuration,
+        gameDuration: updatedDuration,
+        shotClockRemaining: updatedShotClock,
+        shotClockDuration: updatedShotClock,
+      });
+      setToast({
+        message: `Timing updated: ${updatedStructure === 'HALVES' ? '2 Halves' : '4 Quarters'} @ ${Math.floor(updatedDuration / 60)}:00`,
+        type: 'success',
+      });
+      fetchMatch();
+    } catch (err) {
+      setToast({ message: 'Failed to update timing: ' + err.message, type: 'error' });
+    }
+  };
+
+  // Sync Latest Players from Teams Directory
+  const handleSyncRosters = async () => {
+    try {
+      setIsSyncing(true);
+      const res = await matchApi.syncRosters(id);
+      setToast({ message: res.data?.message || 'Rosters refreshed with latest team players!', type: 'success' });
+      await fetchMatch();
+    } catch (err) {
+      setToast({ message: 'Failed to sync rosters: ' + err.message, type: 'error' });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Add or Replace Player Submit
+  const handleAddPlayerSubmit = async (e) => {
+    e.preventDefault();
+    if (!playerModal.name || playerModal.jerseyNumber === '') {
+      setToast({ message: 'Please enter player name and jersey number', type: 'error' });
+      return;
+    }
+    try {
+      setIsAddingPlayer(true);
+      await matchApi.addOrReplacePlayer(id, {
+        team: playerModal.team,
+        name: playerModal.name,
+        jerseyNumber: Number(playerModal.jerseyNumber),
+        position: playerModal.position,
+        replacePlayerId: playerModal.replacePlayerId || null,
+        asStarter: playerModal.asStarter,
+      });
+      setToast({
+        message: playerModal.replacePlayerId
+          ? `Player replaced successfully with #${playerModal.jerseyNumber} ${playerModal.name}!`
+          : `New player #${playerModal.jerseyNumber} ${playerModal.name} added to roster!`,
+        type: 'success',
+      });
+      setPlayerModal({
+        isOpen: false,
+        team: 'A',
+        name: '',
+        jerseyNumber: '',
+        position: 'Guard',
+        replacePlayerId: '',
+        asStarter: false,
+      });
+      await fetchMatch();
+    } catch (err) {
+      setToast({ message: 'Failed to add/replace player: ' + err.message, type: 'error' });
+    } finally {
+      setIsAddingPlayer(false);
+    }
+  };
+
   const handleLaunchMatch = async () => {
     try {
       // Update possession first
       await matchApi.togglePossession(match._id, initialPossession);
 
-      // Persist chosen timeout duration
+      // Persist chosen timeout duration & settings
       await matchApi.update(match._id, {
         timeoutDuration,
         'settings.timeoutDuration': timeoutDuration,
@@ -141,21 +257,33 @@ const MatchSetupPage = () => {
       {/* Back Link & Delete Match */}
       <div className="flex items-center justify-between">
         <Link
-          to="/dashboard"
+          to={match.tournamentId?._id ? `/tournaments/${match.tournamentId._id}` : '/dashboard'}
           className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-400 hover:text-white transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+          <ArrowLeft className="w-4 h-4" />
+          {match.tournamentId?.name ? `Back to ${match.tournamentId.name}` : 'Back to Dashboard'}
         </Link>
 
         {(isAdmin || isScorer) && (
-          <button
-            onClick={handleDeleteMatch}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-white font-bold text-xs border border-red-800/60 shadow transition-all active:scale-95"
-            title="Delete Match"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Delete Match</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSyncRosters}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-white font-mono text-xs border border-slate-700 transition-all active:scale-95 disabled:opacity-50"
+              title="Refresh rosters from Teams directory"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'Syncing...' : 'Sync Team Players'}</span>
+            </button>
+            <button
+              onClick={handleDeleteMatch}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-400 hover:text-white font-bold text-xs border border-red-800/60 shadow transition-all active:scale-95"
+              title="Delete Match"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete Match</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -174,7 +302,8 @@ const MatchSetupPage = () => {
                 🏀 {is5x5 ? 'BASKETBALL 5x5' : 'BASKETBALL 3x3'} PRE-MATCH STAGING
               </span>
               <span className="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-0.5 rounded border border-slate-700">
-                {is5x5 ? '4 Quarters (10:00)' : '1 Period (10:00)'}
+                {matchStructure === 'HALVES' ? '2 Halves' : is5x5 ? '4 Quarters' : '1 Period'} (
+                {Math.floor(quarterDuration / 60)}:00)
               </span>
             </div>
 
@@ -184,9 +313,9 @@ const MatchSetupPage = () => {
             <p className="text-xs text-slate-400 font-mono mt-1.5 flex flex-wrap items-center gap-3">
               <span>Venue: {match.venue || 'Center Court'}</span>
               <span>•</span>
-              <span>Shot Clock: {match.settings?.shotClock || match.shotClockDuration || (is5x5 ? 24 : 12)}s</span>
+              <span>Shot Clock: {shotClock === 0 ? 'OFF (Disabled)' : `${shotClock}s`}</span>
               <span>•</span>
-              <span>Target: {match.targetScore ? `${match.targetScore} PTS (Sudden Win)` : 'No Target (Time Limit)'}</span>
+              <span>Target: {match.targetScore ? `${match.targetScore} PTS (Sudden Win)` : 'Time Limit'}</span>
               <span>•</span>
               <span>Team Foul Bonus: {match.foulLimit || (is5x5 ? 5 : 7)} fouls</span>
             </p>
@@ -203,6 +332,122 @@ const MatchSetupPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Match Timing & Game Structure Settings (Customizable before match start) */}
+      {is5x5 && (
+        <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-amber-400" />
+              <h2 className="font-bold text-white text-base">Match Structure & Period Timing</h2>
+            </div>
+            <span className="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-full border border-cyan-500/30">
+              {matchStructure === 'HALVES' ? '2 Halves Format' : '4 Quarters Format'}
+            </span>
+          </div>
+          <p className="text-xs text-slate-400">
+            College tournaments me aksar 2 Halves (15 or 20 min) khele jaate hain. Yaha se match start hone se pehle timing adjust karein:
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            {/* Structure: Quarters vs Halves */}
+            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
+              <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                1. Select Game Structure
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleUpdateTiming('QUARTERS', quarterDuration === 900 ? 600 : quarterDuration, null)}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    matchStructure === 'QUARTERS'
+                      ? 'border-cyan-500 bg-cyan-500/20 text-white ring-2 ring-cyan-500/30'
+                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <p className="font-bold text-xs text-cyan-400">4 Quarters (FIBA)</p>
+                  <p className="text-[11px] font-mono text-slate-500 mt-0.5">Q1, Q2, Q3, Q4</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateTiming('HALVES', 900, null)}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    matchStructure === 'HALVES'
+                      ? 'border-amber-500 bg-amber-500/20 text-white ring-2 ring-amber-500/30'
+                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <p className="font-bold text-xs text-amber-400">2 Halves (College)</p>
+                  <p className="text-[11px] font-mono text-slate-500 mt-0.5">Half 1 & Half 2</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Duration per Period / Half */}
+            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
+              <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                2. {matchStructure === 'HALVES' ? 'Duration per Half' : 'Duration per Quarter'}
+              </span>
+              <div className="grid grid-cols-4 gap-2">
+                {(matchStructure === 'HALVES'
+                  ? [
+                      { label: '10 Min', val: 600 },
+                      { label: '15 Min', val: 900 },
+                      { label: '20 Min', val: 1200 },
+                      { label: '25 Min', val: 1500 },
+                    ]
+                  : [
+                      { label: '5 Min', val: 300 },
+                      { label: '8 Min', val: 480 },
+                      { label: '10 Min', val: 600 },
+                      { label: '12 Min', val: 720 },
+                    ]
+                ).map((opt) => (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => handleUpdateTiming(null, opt.val, null)}
+                    className={`py-2 px-1 text-center rounded-xl text-xs font-mono font-bold border transition-all ${
+                      quarterDuration === opt.val
+                        ? 'border-orange-500 bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/40'
+                        : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Shot Clock Option */}
+          <div className="pt-2 flex items-center justify-between border-t border-slate-800">
+            <span className="text-xs font-mono text-slate-400">
+              Shot Clock Setting: <strong className="text-white">{shotClock === 0 ? 'OFF (Disabled)' : `${shotClock}s`}</strong>
+            </span>
+            <div className="flex items-center gap-2">
+              {[
+                { label: '24s', val: 24 },
+                { label: '14s', val: 14 },
+                { label: 'OFF', val: 0 },
+              ].map((sc) => (
+                <button
+                  key={sc.val}
+                  type="button"
+                  onClick={() => handleUpdateTiming(null, null, sc.val)}
+                  className={`px-3 py-1 rounded-lg text-xs font-mono font-bold border transition-all ${
+                    shotClock === sc.val
+                      ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40'
+                      : 'bg-slate-900 text-slate-400 border-slate-800'
+                  }`}
+                >
+                  {sc.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Opening Possession Picker */}
       <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
@@ -296,7 +541,7 @@ const MatchSetupPage = () => {
                 <span className="font-bold text-white text-sm">1 Minute (Standard)</span>
               </div>
               <p className="text-[11px] font-mono text-slate-400 mt-1">
-                Official FIBA 3x3 standard 60-second team timeout
+                Official FIBA standard 60-second team timeout
               </p>
             </div>
             {timeoutDuration === 60 && <CheckCircle2 className="w-5 h-5 text-orange-400" />}
@@ -325,7 +570,7 @@ const MatchSetupPage = () => {
         </div>
       </div>
 
-      {/* Roster Breakdown (Starters & Substitutes) */}
+      {/* Roster Breakdown (Starters & Substitutes) with Direct Add/Replace Player */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Team A Roster */}
         <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
@@ -334,9 +579,29 @@ const MatchSetupPage = () => {
               <Shield className="w-4 h-4 text-orange-400" />
               <h3 className="font-bold text-white text-sm">{match.teamA?.name} Lineup</h3>
             </div>
-            <span className="text-xs font-mono text-slate-400">
-              {teamAStarters.length} Starters • {teamASubs.length} Subs
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-slate-400">
+                {teamAStarters.length} Starters • {teamASubs.length} Subs
+              </span>
+              {(isAdmin || isScorer) && (
+                <button
+                  onClick={() => setPlayerModal({
+                    isOpen: true,
+                    team: 'A',
+                    name: '',
+                    jerseyNumber: '',
+                    position: 'Guard',
+                    replacePlayerId: '',
+                    asStarter: false,
+                  })}
+                  className="px-2 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-xs font-mono font-bold flex items-center gap-1 border border-orange-500/30"
+                  title="Add or replace player for Team A"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>+ Player</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Starters */}
@@ -355,20 +620,39 @@ const MatchSetupPage = () => {
                   </span>
                   <span className="font-bold text-white text-xs">{p.name}</span>
                 </div>
-                <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">
-                  Starter
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">
+                    Starter
+                  </span>
+                  {(isAdmin || isScorer) && (
+                    <button
+                      onClick={() => setPlayerModal({
+                        isOpen: true,
+                        team: 'A',
+                        name: '',
+                        jerseyNumber: '',
+                        position: p.position || 'Guard',
+                        replacePlayerId: (p.player?._id || p.player).toString(),
+                        asStarter: true,
+                      })}
+                      className="text-[10px] font-mono text-slate-400 hover:text-orange-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800"
+                      title="Replace this absent/injured player"
+                    >
+                      Swap
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
 
           {/* Substitutes */}
-          {teamASubs.length > 0 && (
-            <div className="space-y-2 pt-2">
-              <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">
-                Bench Substitutes ({teamASubs.length})
-              </span>
-              {teamASubs.map((p) => (
+          <div className="space-y-2 pt-2">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">
+              Bench Substitutes ({teamASubs.length})
+            </span>
+            {teamASubs.length > 0 ? (
+              teamASubs.map((p) => (
                 <div
                   key={p.player?._id || p.player}
                   className="p-2.5 rounded-xl bg-slate-950/40 border border-slate-800 flex items-center justify-between"
@@ -383,9 +667,11 @@ const MatchSetupPage = () => {
                     Bench
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 font-mono italic">No substitutes on bench</p>
+            )}
+          </div>
         </div>
 
         {/* Team B Roster */}
@@ -395,9 +681,29 @@ const MatchSetupPage = () => {
               <Shield className="w-4 h-4 text-cyan-400" />
               <h3 className="font-bold text-white text-sm">{match.teamB?.name} Lineup</h3>
             </div>
-            <span className="text-xs font-mono text-slate-400">
-              {teamBStarters.length} Starters • {teamBSubs.length} Subs
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-slate-400">
+                {teamBStarters.length} Starters • {teamBSubs.length} Subs
+              </span>
+              {(isAdmin || isScorer) && (
+                <button
+                  onClick={() => setPlayerModal({
+                    isOpen: true,
+                    team: 'B',
+                    name: '',
+                    jerseyNumber: '',
+                    position: 'Guard',
+                    replacePlayerId: '',
+                    asStarter: false,
+                  })}
+                  className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 text-xs font-mono font-bold flex items-center gap-1 border border-cyan-500/30"
+                  title="Add or replace player for Team B"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>+ Player</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Starters */}
@@ -416,20 +722,39 @@ const MatchSetupPage = () => {
                   </span>
                   <span className="font-bold text-white text-xs">{p.name}</span>
                 </div>
-                <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">
-                  Starter
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono uppercase bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">
+                    Starter
+                  </span>
+                  {(isAdmin || isScorer) && (
+                    <button
+                      onClick={() => setPlayerModal({
+                        isOpen: true,
+                        team: 'B',
+                        name: '',
+                        jerseyNumber: '',
+                        position: p.position || 'Guard',
+                        replacePlayerId: (p.player?._id || p.player).toString(),
+                        asStarter: true,
+                      })}
+                      className="text-[10px] font-mono text-slate-400 hover:text-cyan-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800"
+                      title="Replace this absent/injured player"
+                    >
+                      Swap
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
 
           {/* Substitutes */}
-          {teamBSubs.length > 0 && (
-            <div className="space-y-2 pt-2">
-              <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">
-                Bench Substitutes ({teamBSubs.length})
-              </span>
-              {teamBSubs.map((p) => (
+          <div className="space-y-2 pt-2">
+            <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block tracking-wider">
+              Bench Substitutes ({teamBSubs.length})
+            </span>
+            {teamBSubs.length > 0 ? (
+              teamBSubs.map((p) => (
                 <div
                   key={p.player?._id || p.player}
                   className="p-2.5 rounded-xl bg-slate-950/40 border border-slate-800 flex items-center justify-between"
@@ -444,9 +769,11 @@ const MatchSetupPage = () => {
                     Bench
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 font-mono italic">No substitutes on bench</p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -461,6 +788,149 @@ const MatchSetupPage = () => {
           <ArrowRight className="w-5 h-5" />
         </button>
       </div>
+
+      {/* MODAL: ADD / EMERGENCY REPLACE PLAYER */}
+      {playerModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-white text-base">
+                  {playerModal.replacePlayerId ? 'Emergency Swap / Replace Player' : 'Add Player to Roster'}
+                </h3>
+                <p className="text-xs text-slate-400 font-mono">
+                  {playerModal.team === 'A' ? match.teamA?.name : match.teamB?.name}
+                </p>
+              </div>
+              <button
+                onClick={() => setPlayerModal({ ...playerModal, isOpen: false })}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddPlayerSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase mb-1">
+                  Team
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPlayerModal({ ...playerModal, team: 'A', replacePlayerId: '' })}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                      playerModal.team === 'A'
+                        ? 'bg-orange-500/20 text-orange-400 border-orange-500/50'
+                        : 'bg-slate-950 text-slate-400 border-slate-800'
+                    }`}
+                  >
+                    {match.teamA?.name || 'Team A'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlayerModal({ ...playerModal, team: 'B', replacePlayerId: '' })}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                      playerModal.team === 'B'
+                        ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50'
+                        : 'bg-slate-950 text-slate-400 border-slate-800'
+                    }`}
+                  >
+                    {match.teamB?.name || 'Team B'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase mb-1">
+                  Player Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                  value={playerModal.name}
+                  onChange={(e) => setPlayerModal({ ...playerModal, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase mb-1">
+                    Jersey #
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    max="99"
+                    placeholder="23"
+                    value={playerModal.jerseyNumber}
+                    onChange={(e) => setPlayerModal({ ...playerModal, jerseyNumber: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase mb-1">
+                    Position
+                  </label>
+                  <select
+                    value={playerModal.position}
+                    onChange={(e) => setPlayerModal({ ...playerModal, position: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="Guard">Guard</option>
+                    <option value="Forward">Forward</option>
+                    <option value="Center">Center</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Replace existing player or Add to bench */}
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase mb-1">
+                  Roster Assignment
+                </label>
+                <select
+                  value={playerModal.replacePlayerId}
+                  onChange={(e) => setPlayerModal({ ...playerModal, replacePlayerId: e.target.value, asStarter: Boolean(e.target.value) })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                >
+                  <option value="">Add as Bench Substitute</option>
+                  <optgroup label="Replace Active Court Player (Unavailable/Late)">
+                    {(playerModal.team === 'A' ? teamAStarters : teamBStarters).map((p) => {
+                      const pid = (p.player?._id || p.player).toString();
+                      return (
+                        <option key={pid} value={pid}>
+                          Replace #{p.jerseyNumber} {p.name} (Starter)
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPlayerModal({ ...playerModal, isOpen: false })}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingPlayer}
+                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-md shadow-orange-600/30 disabled:opacity-50"
+                >
+                  {isAddingPlayer ? 'Saving...' : playerModal.replacePlayerId ? 'Swap & Replace' : 'Add to Roster'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>

@@ -310,7 +310,9 @@ const PublicScoreboardPage = () => {
             {/* Huge Game Clock */}
             <div className="p-6 rounded-3xl bg-slate-950/80 border border-slate-800 shadow-2xl w-full flex flex-col items-center">
               <span className="text-xs font-mono uppercase font-bold text-slate-400 tracking-widest mb-2">
-                {is5x5 ? `PERIOD: ${match.currentPeriod || 'Q1'}` : 'REGULATION CLOCK'}
+                {is5x5
+                  ? `PERIOD: ${match.currentPeriod === 'H1' ? '1ST HALF' : match.currentPeriod === 'H2' ? '2ND HALF' : (match.currentPeriod || 'Q1')}`
+                  : 'REGULATION CLOCK'}
               </span>
               <DigitalTimer
                 remainingTime={match.remainingTime}
@@ -321,7 +323,7 @@ const PublicScoreboardPage = () => {
               />
             </div>
 
-            {/* Shot Clock (12s for 3x3, 24s for 5x5) */}
+            {/* Shot Clock (12s for 3x3, 24s for 5x5, or OFF) */}
             <div className="w-full max-w-xs">
               <ShotClock
                 shotClockRemaining={match.shotClockRemaining}
@@ -329,6 +331,7 @@ const PublicScoreboardPage = () => {
                 shotClockStartedAt={match.shotClockStartedAt}
                 serverTime={match.serverTime}
                 matchType={match.matchType || '3x3'}
+                disabled={match.settings?.shotClock === 0}
                 isScorer={false}
                 large={true}
               />
@@ -337,7 +340,7 @@ const PublicScoreboardPage = () => {
             <div className="text-center">
               <span className="text-xs font-mono uppercase tracking-widest text-slate-400">
                 {is5x5
-                  ? `4 QUARTERS • ${match.settings?.shotClock || 24}S SHOT CLOCK`
+                  ? `${match.settings?.matchStructure === 'HALVES' ? '2 HALVES' : '4 QUARTERS'} • ${match.settings?.shotClock === 0 ? 'NO SHOT CLOCK' : `${match.settings?.shotClock || 24}S SHOT CLOCK`}`
                   : `FIRST TO ${match.targetScore || 21} PTS WINS`}
               </span>
             </div>

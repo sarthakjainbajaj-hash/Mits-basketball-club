@@ -241,6 +241,71 @@ const updateTeam = async (req, res) => {
 
     await team.save();
 
+    // Automatically propagate updated players to any SCHEDULED matches involving this team
+    try {
+      const scheduledMatches = await Match.find({
+        $or: [{ teamA: team._id }, { teamB: team._id }],
+        status: 'SCHEDULED',
+      });
+
+      if (scheduledMatches.length > 0) {
+        const teamPlayers = await Player.find({ teamId: team._id });
+        const formatPlayers = teamPlayers.map((p) => ({
+          player: p._id,
+          name: p.name,
+          jerseyNumber: p.jerseyNumber,
+          position: p.position || 'Guard',
+        }));
+
+        for (const sm of scheduledMatches) {
+          const isTeamA = sm.teamA.toString() === team._id.toString();
+          const reqStarters = sm.matchType === '5x5' ? 5 : 3;
+
+          if (isTeamA) {
+            sm.teamA_roster = {
+              starters: formatPlayers.slice(0, reqStarters),
+              substitutes: formatPlayers.slice(reqStarters),
+            };
+            sm.playersA = formatPlayers;
+          } else {
+            sm.teamB_roster = {
+              starters: formatPlayers.slice(0, reqStarters),
+              substitutes: formatPlayers.slice(reqStarters),
+            };
+            sm.playersB = formatPlayers;
+          }
+
+          // Rebuild playerStats for this team
+          const existingOtherStats = (sm.playerStats || []).filter(
+            (s) => s.team !== (isTeamA ? 'A' : 'B')
+          );
+          const newTeamStats = formatPlayers.map((p, idx) => ({
+            playerId: p.player,
+            playerName: p.name,
+            jerseyNumber: p.jerseyNumber,
+            teamId: team._id,
+            team: isTeamA ? 'A' : 'B',
+            isStarter: idx < reqStarters,
+            isActive: idx < reqStarters,
+            points: 0,
+            onePoints: 0,
+            twoPoints: 0,
+            threePoints: 0,
+            rebounds: 0,
+            assists: 0,
+            steals: 0,
+            blocks: 0,
+            fouls: 0,
+          }));
+
+          sm.playerStats = [...existingOtherStats, ...newTeamStats];
+          await sm.save();
+        }
+      }
+    } catch (syncErr) {
+      console.error('Non-blocking scheduled match roster update error:', syncErr);
+    }
+
     const populatedTeam = await Team.findById(team._id).populate('players');
     res.status(200).json({ success: true, data: populatedTeam });
   } catch (error) {

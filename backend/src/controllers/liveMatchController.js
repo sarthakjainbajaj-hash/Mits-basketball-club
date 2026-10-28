@@ -1011,31 +1011,44 @@ const controlPeriod = async (req, res) => {
       return res.status(200).json({ success: true, data: responseData || match, event });
     } else if (action === 'NEXT_QUARTER') {
       const current = match.currentPeriod || 'Q1';
+      const isHalves = match.settings?.matchStructure === 'HALVES' || current.startsWith('H');
       let nextPeriod = 'Q2';
-      if (current === 'Q1') nextPeriod = 'Q2';
-      else if (current === 'Q2') nextPeriod = 'Q3';
-      else if (current === 'Q3') nextPeriod = 'Q4';
-      else if (current === 'Q4') nextPeriod = 'OT1';
-      else if (current.startsWith('OT')) {
-        const otNum = parseInt(current.replace('OT', '')) || 1;
-        nextPeriod = `OT${otNum + 1}`;
+
+      if (isHalves) {
+        if (current === 'H1') nextPeriod = 'H2';
+        else if (current === 'H2') nextPeriod = 'OT1';
+        else if (current.startsWith('OT')) {
+          const otNum = parseInt(current.replace('OT', '')) || 1;
+          nextPeriod = `OT${otNum + 1}`;
+        } else {
+          nextPeriod = 'H2';
+        }
       } else {
-        nextPeriod = 'Q2';
+        if (current === 'Q1') nextPeriod = 'Q2';
+        else if (current === 'Q2') nextPeriod = 'Q3';
+        else if (current === 'Q3') nextPeriod = 'Q4';
+        else if (current === 'Q4') nextPeriod = 'OT1';
+        else if (current.startsWith('OT')) {
+          const otNum = parseInt(current.replace('OT', '')) || 1;
+          nextPeriod = `OT${otNum + 1}`;
+        } else {
+          nextPeriod = 'Q2';
+        }
       }
 
       match.currentPeriod = nextPeriod;
       const isOt = nextPeriod.startsWith('OT');
-      const quarterSec = isOt ? 300 : (match.settings?.quarterDuration || 600);
-      match.remainingTime = quarterSec;
+      const periodSec = isOt ? 300 : (match.settings?.quarterDuration || match.gameDuration || 600);
+      match.remainingTime = periodSec;
       match.timerRunning = false;
       match.timerStartedAt = null;
 
-      const fullShotClock = match.settings?.shotClock || (match.matchType === '5x5' ? 24 : 12);
+      const fullShotClock = match.settings?.shotClock !== undefined ? match.settings.shotClock : (match.matchType === '5x5' ? 24 : 12);
       match.shotClockRemaining = fullShotClock;
       match.shotClockRunning = false;
       match.shotClockStartedAt = null;
 
-      // In 5x5 basketball, team fouls reset per quarter
+      // In 5x5 basketball, team fouls reset per period / half
       if (match.matchType === '5x5') {
         match.foulsA = 0;
         match.foulsB = 0;
@@ -1292,6 +1305,280 @@ const endMatch = async (req, res) => {
   }
 };
 
+// @desc    Set manual remaining time (game clock & shot clock edit)
+// @route   POST /api/matches/:id/set-time
+// @access  Private (Admin, Scorer)
+const setTime = async (req, res) => {
+  try {
+    const { remainingTime, shotClockRemaining } = req.body;
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    const now = Date.now();
+    if (remainingTime !== undefined && !isNaN(Number(remainingTime))) {
+      match.remainingTime = Math.max(0, Math.round(Number(remainingTime) * 10) / 10);
+      if (match.timerRunning) {
+        match.timerStartedAt = now;
+      }
+    }
+
+    if (shotClockRemaining !== undefined && !isNaN(Number(shotClockRemaining))) {
+      match.shotClockRemaining = Math.max(0, Math.round(Number(shotClockRemaining) * 10) / 10);
+      if (match.shotClockRunning) {
+        match.shotClockStartedAt = now;
+      }
+    }
+
+    await match.save();
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'CLOCK_ADJUST',
+      gameTime: formatTime(match.remainingTime),
+      metadata: {
+        remainingTime: match.remainingTime,
+        shotClockRemaining: match.shotClockRemaining,
+        description: `Clock adjusted to ${formatTime(match.remainingTime)}`,
+      },
+    });
+
+    const responseData = await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: responseData || match, event });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Add new player on-the-fly or emergency replace an on-court player mid-game
+// @route   POST /api/matches/:id/players/add-replace
+// @access  Private (Admin, Scorer)
+const addOrReplacePlayer = async (req, res) => {
+  try {
+    const {
+      team, // 'A' or 'B'
+      name,
+      jerseyNumber,
+      position = 'Guard',
+      replacePlayerId = null, // if provided, replaces this player on court
+      asStarter = false,
+    } = req.body;
+
+    if (!['A', 'B'].includes(team) || !name || jerseyNumber === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Team (A or B), player name, and jersey number are required',
+      });
+    }
+
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    const teamId = team === 'A' ? (match.teamA?._id || match.teamA) : (match.teamB?._id || match.teamB);
+    const rosterKey = team === 'A' ? 'teamA_roster' : 'teamB_roster';
+
+    // 1. Create or find player in database for the team
+    let player = await Player.findOne({
+      teamId,
+      $or: [
+        { jerseyNumber: Number(jerseyNumber) },
+        { name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } },
+      ],
+    });
+
+    if (!player) {
+      player = await Player.create({
+        teamId,
+        name: name.trim(),
+        jerseyNumber: Number(jerseyNumber),
+        position: position || 'Guard',
+      });
+    }
+
+    if (!match[rosterKey]) {
+      match[rosterKey] = { starters: [], substitutes: [] };
+    }
+    const roster = match[rosterKey];
+    const playerEmbedded = {
+      player: player._id,
+      name: player.name,
+      jerseyNumber: player.jerseyNumber,
+      position: player.position || position || 'Guard',
+    };
+
+    const alreadyStarter = roster.starters.findIndex((p) => (p.player?._id || p.player || '').toString() === player._id.toString());
+    const alreadySub = roster.substitutes.findIndex((p) => (p.player?._id || p.player || '').toString() === player._id.toString());
+
+    if (replacePlayerId) {
+      const replaceIdx = roster.starters.findIndex(
+        (p) => (p.player?._id || p.player || '').toString() === replacePlayerId.toString()
+      );
+      if (replaceIdx !== -1) {
+        const outPlayer = roster.starters[replaceIdx];
+        if (!roster.substitutes.some((p) => (p.player?._id || p.player || '').toString() === (outPlayer.player?._id || outPlayer.player || '').toString())) {
+          roster.substitutes.push(outPlayer);
+        }
+        roster.starters.splice(replaceIdx, 1, playerEmbedded);
+
+        const outStat = match.playerStats?.find(
+          (s) => (s.playerId?._id || s.playerId || '').toString() === replacePlayerId.toString()
+        );
+        if (outStat) outStat.isActive = false;
+      } else {
+        const subIdx = roster.substitutes.findIndex(
+          (p) => (p.player?._id || p.player || '').toString() === replacePlayerId.toString()
+        );
+        if (subIdx !== -1) {
+          roster.substitutes.splice(subIdx, 1, playerEmbedded);
+        } else {
+          roster.substitutes.push(playerEmbedded);
+        }
+      }
+    } else if (asStarter) {
+      if (alreadyStarter === -1) {
+        roster.starters.push(playerEmbedded);
+      }
+    } else {
+      if (alreadySub === -1 && alreadyStarter === -1) {
+        roster.substitutes.push(playerEmbedded);
+      }
+    }
+
+    if (!match.playerStats) match.playerStats = [];
+    let statEntry = match.playerStats.find((s) => (s.playerId?._id || s.playerId || '').toString() === player._id.toString());
+    if (!statEntry) {
+      match.playerStats.push({
+        playerId: player._id,
+        playerName: player.name,
+        jerseyNumber: player.jerseyNumber,
+        teamId,
+        team,
+        isStarter: Boolean(replacePlayerId || asStarter),
+        isActive: Boolean(replacePlayerId || asStarter),
+        points: 0,
+        onePoints: 0,
+        twoPoints: 0,
+        threePoints: 0,
+        rebounds: 0,
+        assists: 0,
+        steals: 0,
+        blocks: 0,
+        fouls: 0,
+      });
+    } else if (replacePlayerId || asStarter) {
+      statEntry.isActive = true;
+    }
+
+    const playersKey = team === 'A' ? 'playersA' : 'playersB';
+    if (!match[playersKey].some((p) => (p.player?._id || p.player || '').toString() === player._id.toString())) {
+      match[playersKey].push(playerEmbedded);
+    }
+
+    match[rosterKey] = roster;
+    await match.save();
+
+    const event = await MatchEvent.create({
+      matchId: match._id,
+      type: 'PLAYER_ADDED',
+      team,
+      playerId: player._id,
+      playerName: player.name,
+      jerseyNumber: player.jerseyNumber,
+      gameTime: formatTime(match.getCurrentRemainingTime()),
+      period: match.currentPeriod || '',
+      metadata: {
+        description: replacePlayerId
+          ? `Emergency Replace: #${player.jerseyNumber} ${player.name} IN for unavailable player`
+          : `New Player #${player.jerseyNumber} ${player.name} added to Team ${team} bench`,
+      },
+    });
+
+    const responseData = await broadcastState(req, match, event);
+    res.status(200).json({ success: true, data: responseData || match, event, player });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Sync match rosters from registered team players (for SCHEDULED matches)
+// @route   POST /api/matches/:id/sync-rosters
+// @access  Private (Admin, Scorer)
+const syncMatchRosters = async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    if (match.status !== 'SCHEDULED') {
+      return res.status(400).json({
+        success: false,
+        message: 'Can only sync rosters before match starts',
+      });
+    }
+
+    const teamAId = match.teamA._id || match.teamA;
+    const teamBId = match.teamB._id || match.teamB;
+    const [teamAPlayers, teamBPlayers] = await Promise.all([
+      Player.find({ teamId: teamAId }),
+      Player.find({ teamId: teamBId }),
+    ]);
+
+    const reqStarters = match.matchType === '5x5' ? 5 : 3;
+    const formatPlayers = (list) =>
+      list.map((p) => ({
+        player: p._id,
+        name: p.name,
+        jerseyNumber: p.jerseyNumber,
+        position: p.position || 'Guard',
+      }));
+
+    if (teamAPlayers.length >= reqStarters) {
+      match.teamA_roster = {
+        starters: formatPlayers(teamAPlayers.slice(0, reqStarters)),
+        substitutes: formatPlayers(teamAPlayers.slice(reqStarters)),
+      };
+      match.playersA = formatPlayers(teamAPlayers);
+    }
+
+    if (teamBPlayers.length >= reqStarters) {
+      match.teamB_roster = {
+        starters: formatPlayers(teamBPlayers.slice(0, reqStarters)),
+        substitutes: formatPlayers(teamBPlayers.slice(reqStarters)),
+      };
+      match.playersB = formatPlayers(teamBPlayers);
+    }
+
+    const allA = [...(match.teamA_roster?.starters || []), ...(match.teamA_roster?.substitutes || [])];
+    const allB = [...(match.teamB_roster?.starters || []), ...(match.teamB_roster?.substitutes || [])];
+
+    match.playerStats = [
+      ...allA.map((p, idx) => ({
+        playerId: p.player,
+        playerName: p.name,
+        jerseyNumber: p.jerseyNumber,
+        teamId: teamAId,
+        team: 'A',
+        isStarter: idx < reqStarters,
+        isActive: idx < reqStarters,
+        points: 0, onePoints: 0, twoPoints: 0, threePoints: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0,
+      })),
+      ...allB.map((p, idx) => ({
+        playerId: p.player,
+        playerName: p.name,
+        jerseyNumber: p.jerseyNumber,
+        teamId: teamBId,
+        team: 'B',
+        isStarter: idx < reqStarters,
+        isActive: idx < reqStarters,
+        points: 0, onePoints: 0, twoPoints: 0, threePoints: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0,
+      })),
+    ];
+
+    await match.save();
+    const responseData = await broadcastState(req, match);
+    res.status(200).json({ success: true, data: responseData || match, message: 'Rosters successfully synced!' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   startMatch,
   pauseMatch,
@@ -1306,4 +1593,7 @@ module.exports = {
   controlPeriod,
   undoLastAction,
   endMatch,
+  setTime,
+  addOrReplacePlayer,
+  syncMatchRosters,
 };
