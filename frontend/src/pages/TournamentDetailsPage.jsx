@@ -93,6 +93,20 @@ const TournamentDetailsPage = () => {
     venue: '',
   });
 
+  // Reschedule Match Modal State
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [reschedulingMatch, setReschedulingMatch] = useState(false);
+  const [rescheduleForm, setRescheduleForm] = useState({
+    matchId: '',
+    matchName: '',
+    scheduledDate: '',
+    scheduledTime: '',
+    venue: '',
+    matchStructure: 'QUARTERS',
+    quarterDuration: 600,
+    shotClock: 24,
+  });
+
   useEffect(() => {
     fetchTournamentData();
   }, [id]);
@@ -323,6 +337,60 @@ const TournamentDetailsPage = () => {
       });
     } finally {
       setFixingMatch(false);
+    }
+  };
+
+  // Open Reschedule Modal
+  const handleOpenRescheduleModal = (m) => {
+    const rawDate = m.scheduledDate ? new Date(m.scheduledDate) : new Date();
+    const yyyy = rawDate.getFullYear();
+    const mm = String(rawDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(rawDate.getDate()).padStart(2, '0');
+    const formattedDate = `${yyyy}-${mm}-${dd}`;
+
+    setRescheduleForm({
+      matchId: m._id,
+      matchName: m.matchName || '',
+      scheduledDate: formattedDate,
+      scheduledTime: m.scheduledTime || '18:00',
+      venue: m.venue || '',
+      matchStructure: m.settings?.matchStructure || (m.matchType === '5x5' ? 'QUARTERS' : 'SINGLE'),
+      quarterDuration: m.settings?.quarterDuration || m.gameDuration || 600,
+      shotClock: m.settings?.shotClock !== undefined ? m.settings.shotClock : (m.matchType === '5x5' ? 24 : 12),
+    });
+    setIsRescheduleModalOpen(true);
+  };
+
+  // Submit Reschedule / Edit Match Timing
+  const handleRescheduleSubmit = async (e) => {
+    e.preventDefault();
+    if (!rescheduleForm.matchId) return;
+    try {
+      setReschedulingMatch(true);
+      await matchApi.update(rescheduleForm.matchId, {
+        matchName: rescheduleForm.matchName,
+        scheduledDate: rescheduleForm.scheduledDate,
+        scheduledTime: rescheduleForm.scheduledTime,
+        venue: rescheduleForm.venue,
+        'settings.matchStructure': rescheduleForm.matchStructure,
+        'settings.quarterDuration': Number(rescheduleForm.quarterDuration),
+        'settings.gameDuration': Number(rescheduleForm.quarterDuration),
+        'settings.shotClock': Number(rescheduleForm.shotClock),
+        'settings.numberOfQuarters': rescheduleForm.matchStructure === 'HALVES' ? 2 : 4,
+        quarterDuration: Number(rescheduleForm.quarterDuration),
+        gameDuration: Number(rescheduleForm.quarterDuration),
+        shotClock: Number(rescheduleForm.shotClock),
+      });
+      setToast({ message: 'Match schedule & timing updated successfully!', type: 'success' });
+      setIsRescheduleModalOpen(false);
+      await fetchTournamentData();
+    } catch (err) {
+      setToast({
+        message: 'Failed to update schedule: ' + (err.response?.data?.message || err.message),
+        type: 'error',
+      });
+    } finally {
+      setReschedulingMatch(false);
     }
   };
 
@@ -683,10 +751,23 @@ const TournamentDetailsPage = () => {
                           </span>
                         </div>
 
-                        <span className="flex items-center gap-1 text-slate-400">
-                          <Clock className="w-3.5 h-3.5 text-slate-500" />
-                          {new Date(m.scheduledDate).toLocaleDateString()} @ {m.scheduledTime || '18:00'}
-                        </span>
+                        {isScheduled && (isAdmin || isScorer) ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRescheduleModal(m)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-slate-700/80 transition-all text-xs font-mono font-bold group"
+                            title="Click to edit match date & timing"
+                          >
+                            <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{new Date(m.scheduledDate).toLocaleDateString()} @ {m.scheduledTime || '18:00'}</span>
+                            <Edit3 className="w-3 h-3 text-slate-400 group-hover:text-white" />
+                          </button>
+                        ) : (
+                          <span className="flex items-center gap-1 text-slate-400">
+                            <Clock className="w-3.5 h-3.5 text-slate-500" />
+                            {new Date(m.scheduledDate).toLocaleDateString()} @ {m.scheduledTime || '18:00'}
+                          </span>
+                        )}
                       </div>
 
                       {/* Match Name & Venue */}
@@ -767,6 +848,16 @@ const TournamentDetailsPage = () => {
 
                         {isScheduled && (isAdmin || isScorer) && (
                           <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRescheduleModal(m)}
+                              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 font-mono text-xs flex items-center gap-1.5 border border-slate-700 transition-all active:scale-95"
+                              title="Edit Date, Timing & Court"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                              <span>Reschedule</span>
+                            </button>
+
                             <Link
                               to={`/matches/${m._id}/setup`}
                               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-xs flex items-center gap-1.5 transition-all"
@@ -1700,6 +1791,169 @@ const TournamentDetailsPage = () => {
                   className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md shadow-orange-600/30 transition-all disabled:opacity-50"
                 >
                   {generatingFixtures ? 'Generating Fixtures...' : '⚡ Generate Fixtures Now'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Match Modal */}
+      {isRescheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsRescheduleModalOpen(false)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white">Reschedule Match</h3>
+                <p className="text-xs text-slate-400 font-mono">Update date, timing, venue & period duration</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleRescheduleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Match Name / Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={rescheduleForm.matchName}
+                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, matchName: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={rescheduleForm.scheduledDate}
+                    onChange={(e) => setRescheduleForm({ ...rescheduleForm, scheduledDate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Time
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={rescheduleForm.scheduledTime}
+                    onChange={(e) => setRescheduleForm({ ...rescheduleForm, scheduledTime: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Court / Venue
+                </label>
+                <input
+                  type="text"
+                  value={rescheduleForm.venue}
+                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, venue: e.target.value })}
+                  placeholder="e.g. Main Court, Court 2"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Structure
+                  </label>
+                  <select
+                    value={rescheduleForm.matchStructure}
+                    onChange={(e) =>
+                      setRescheduleForm({
+                        ...rescheduleForm,
+                        matchStructure: e.target.value,
+                        quarterDuration: e.target.value === 'HALVES' ? 900 : 600,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="HALVES">2 Halves (College)</option>
+                    <option value="QUARTERS">4 Quarters</option>
+                    <option value="SINGLE">1 Single Period</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                      Period Duration
+                    </label>
+                    <span className="text-[11px] font-mono font-bold text-white">
+                      {Math.floor(rescheduleForm.quarterDuration / 60)}:00 Mins
+                    </span>
+                  </div>
+                  <select
+                    value={rescheduleForm.quarterDuration}
+                    onChange={(e) =>
+                      setRescheduleForm({ ...rescheduleForm, quarterDuration: Number(e.target.value) })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value={300}>5 Minutes</option>
+                    <option value={480}>8 Minutes</option>
+                    <option value={600}>10 Minutes</option>
+                    <option value={720}>12 Minutes</option>
+                    <option value={900}>15 Minutes</option>
+                    <option value={1200}>20 Minutes</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Shot Clock
+                </label>
+                <select
+                  value={rescheduleForm.shotClock}
+                  onChange={(e) =>
+                    setRescheduleForm({ ...rescheduleForm, shotClock: Number(e.target.value) })
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                >
+                  <option value={24}>24 Seconds (FIBA / College)</option>
+                  <option value={14}>14 Seconds</option>
+                  <option value={12}>12 Seconds (3x3)</option>
+                  <option value={0}>Disabled / OFF</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsRescheduleModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reschedulingMatch}
+                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/30 transition-all disabled:opacity-50"
+                >
+                  {reschedulingMatch ? 'Saving Schedule...' : 'Update Schedule'}
                 </button>
               </div>
             </form>

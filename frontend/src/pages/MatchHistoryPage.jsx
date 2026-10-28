@@ -15,6 +15,10 @@ import {
   ExternalLink,
   Flame,
   Trash2,
+  Clock,
+  Edit3,
+  X,
+  MapPin,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -32,6 +36,17 @@ const MatchHistoryPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+
+  // Reschedule Modal State
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduleForm, setRescheduleForm] = useState({
+    matchId: '',
+    matchName: '',
+    scheduledDate: '',
+    scheduledTime: '',
+    venue: '',
+  });
 
   useEffect(() => {
     fetchFilters();
@@ -85,6 +100,44 @@ const MatchHistoryPage = () => {
       fetchMatches();
     } catch (err) {
       setToast({ message: 'Failed to delete match: ' + err.message, type: 'error' });
+    }
+  };
+
+  const handleOpenReschedule = (m) => {
+    const rawDate = m.scheduledDate ? new Date(m.scheduledDate) : new Date();
+    const yyyy = rawDate.getFullYear();
+    const mm = String(rawDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(rawDate.getDate()).padStart(2, '0');
+    const formattedDate = `${yyyy}-${mm}-${dd}`;
+
+    setRescheduleForm({
+      matchId: m._id,
+      matchName: m.matchName || '',
+      scheduledDate: formattedDate,
+      scheduledTime: m.scheduledTime || '18:00',
+      venue: m.venue || '',
+    });
+    setIsRescheduleModalOpen(true);
+  };
+
+  const handleRescheduleSubmit = async (e) => {
+    e.preventDefault();
+    if (!rescheduleForm.matchId) return;
+    try {
+      setRescheduling(true);
+      await matchApi.update(rescheduleForm.matchId, {
+        matchName: rescheduleForm.matchName,
+        scheduledDate: rescheduleForm.scheduledDate,
+        scheduledTime: rescheduleForm.scheduledTime,
+        venue: rescheduleForm.venue,
+      });
+      setToast({ message: 'Match schedule updated successfully!', type: 'success' });
+      setIsRescheduleModalOpen(false);
+      fetchMatches();
+    } catch (err) {
+      setToast({ message: 'Failed to update schedule: ' + err.message, type: 'error' });
+    } finally {
+      setRescheduling(false);
     }
   };
 
@@ -241,8 +294,9 @@ const MatchHistoryPage = () => {
                       </span>
                     </div>
 
-                    <span>
-                      {new Date(m.scheduledDate || m.createdAt).toLocaleDateString()}
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-slate-500" />
+                      {new Date(m.scheduledDate || m.createdAt).toLocaleDateString()} {m.scheduledTime ? `@ ${m.scheduledTime}` : ''}
                     </span>
                   </div>
 
@@ -316,6 +370,18 @@ const MatchHistoryPage = () => {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-end gap-2">
+                  {m.status === 'SCHEDULED' && (isAdmin || isScorer) && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenReschedule(m)}
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 font-mono text-xs flex items-center gap-1.5 border border-slate-700 transition-all active:scale-95"
+                      title="Edit Date, Timing & Court"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Reschedule</span>
+                    </button>
+                  )}
+
                   <Link
                     to={`/matches/${m._id}`}
                     className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-orange-600 text-slate-300 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-all"
@@ -342,6 +408,103 @@ const MatchHistoryPage = () => {
           <History className="w-12 h-12 text-slate-600 mx-auto mb-3" />
           <p className="text-white font-bold text-base">No Matches Found</p>
           <p className="text-xs text-slate-400 mt-1">Try clearing or adjusting your search filters</p>
+        </div>
+      )}
+
+      {/* Reschedule Match Modal */}
+      {isRescheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsRescheduleModalOpen(false)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white">Reschedule Match</h3>
+                <p className="text-xs text-slate-400 font-mono">Update scheduled date, kick-off time, and venue</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleRescheduleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Match Name / Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={rescheduleForm.matchName}
+                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, matchName: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={rescheduleForm.scheduledDate}
+                    onChange={(e) => setRescheduleForm({ ...rescheduleForm, scheduledDate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Time
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={rescheduleForm.scheduledTime}
+                    onChange={(e) => setRescheduleForm({ ...rescheduleForm, scheduledTime: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Court / Venue
+                </label>
+                <input
+                  type="text"
+                  value={rescheduleForm.venue}
+                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, venue: e.target.value })}
+                  placeholder="e.g. Main Court, Court 2"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsRescheduleModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={rescheduling}
+                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/30 transition-all disabled:opacity-50"
+                >
+                  {rescheduling ? 'Saving Schedule...' : 'Save Schedule'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

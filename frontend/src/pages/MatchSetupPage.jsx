@@ -22,6 +22,9 @@ import {
   Sliders,
   X,
   AlertCircle,
+  Calendar,
+  MapPin,
+  Edit3,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -36,6 +39,16 @@ const MatchSetupPage = () => {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Edit Schedule Modal State
+  const [isEditScheduleModalOpen, setIsEditScheduleModalOpen] = useState(false);
+  const [isUpdatingSchedule, setIsUpdatingSchedule] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    matchName: '',
+    scheduledDate: '',
+    scheduledTime: '',
+    venue: '',
+  });
 
   // Timing & Structure local state
   const [matchStructure, setMatchStructure] = useState('QUARTERS'); // 'QUARTERS' | 'HALVES' | 'SINGLE'
@@ -95,6 +108,45 @@ const MatchSetupPage = () => {
       });
     } catch (err) {
       console.error('Failed to update timeout duration:', err);
+    }
+  };
+
+  // Open Edit Schedule Modal
+  const handleOpenEditSchedule = () => {
+    if (!match) return;
+    const rawDate = match.scheduledDate ? new Date(match.scheduledDate) : new Date();
+    const yyyy = rawDate.getFullYear();
+    const mm = String(rawDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(rawDate.getDate()).padStart(2, '0');
+    const formattedDate = `${yyyy}-${mm}-${dd}`;
+
+    setScheduleForm({
+      matchName: match.matchName || '',
+      scheduledDate: formattedDate,
+      scheduledTime: match.scheduledTime || '18:00',
+      venue: match.venue || '',
+    });
+    setIsEditScheduleModalOpen(true);
+  };
+
+  // Save Updated Schedule & Court Details
+  const handleSaveSchedule = async (e) => {
+    e.preventDefault();
+    try {
+      setIsUpdatingSchedule(true);
+      await matchApi.update(id, {
+        matchName: scheduleForm.matchName,
+        scheduledDate: scheduleForm.scheduledDate,
+        scheduledTime: scheduleForm.scheduledTime,
+        venue: scheduleForm.venue,
+      });
+      setToast({ message: 'Match schedule & timing updated successfully!', type: 'success' });
+      setIsEditScheduleModalOpen(false);
+      await fetchMatch();
+    } catch (err) {
+      setToast({ message: 'Failed to update schedule: ' + err.message, type: 'error' });
+    } finally {
+      setIsUpdatingSchedule(false);
     }
   };
 
@@ -310,9 +362,32 @@ const MatchSetupPage = () => {
             <h1 className="text-2xl sm:text-4xl font-black text-white mt-3">
               {match.matchName}
             </h1>
-            <p className="text-xs text-slate-400 font-mono mt-1.5 flex flex-wrap items-center gap-3">
-              <span>Venue: {match.venue || 'Center Court'}</span>
-              <span>•</span>
+
+            <div className="flex flex-wrap items-center gap-2.5 mt-2.5">
+              <span className="text-xs font-mono text-slate-300 flex items-center gap-1.5 bg-slate-950/70 px-3 py-1 rounded-xl border border-slate-800">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>
+                  {new Date(match.scheduledDate || match.createdAt).toLocaleDateString()} @ {match.scheduledTime || '18:00'}
+                </span>
+              </span>
+              <span className="text-xs font-mono text-slate-300 flex items-center gap-1.5 bg-slate-950/70 px-3 py-1 rounded-xl border border-slate-800">
+                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{match.venue || 'Center Court'}</span>
+              </span>
+              {(isAdmin || isScorer) && (
+                <button
+                  type="button"
+                  onClick={handleOpenEditSchedule}
+                  className="px-2.5 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                  title="Edit Date, Timing & Court"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Reschedule Match</span>
+                </button>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-400 font-mono mt-2 flex flex-wrap items-center gap-3">
               <span>Shot Clock: {shotClock === 0 ? 'OFF (Disabled)' : `${shotClock}s`}</span>
               <span>•</span>
               <span>Target: {match.targetScore ? `${match.targetScore} PTS (Sudden Win)` : 'Time Limit'}</span>
@@ -925,6 +1000,103 @@ const MatchSetupPage = () => {
                   className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-md shadow-orange-600/30 disabled:opacity-50"
                 >
                   {isAddingPlayer ? 'Saving...' : playerModal.replacePlayerId ? 'Swap & Replace' : 'Add to Roster'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Match Schedule & Venue Modal */}
+      {isEditScheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsEditScheduleModalOpen(false)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white">Reschedule Match</h3>
+                <p className="text-xs text-slate-400 font-mono">Update scheduled date, kick-off time, and court venue</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveSchedule} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Match Name / Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={scheduleForm.matchName}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, matchName: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={scheduleForm.scheduledDate}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, scheduledDate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Time
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={scheduleForm.scheduledTime}
+                    onChange={(e) => setScheduleForm({ ...scheduleForm, scheduledTime: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                  Court / Venue
+                </label>
+                <input
+                  type="text"
+                  value={scheduleForm.venue}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, venue: e.target.value })}
+                  placeholder="e.g. Main Arena Court, Court 2"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditScheduleModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingSchedule}
+                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/30 transition-all disabled:opacity-50"
+                >
+                  {isUpdatingSchedule ? 'Saving Schedule...' : 'Save Schedule Changes'}
                 </button>
               </div>
             </form>
