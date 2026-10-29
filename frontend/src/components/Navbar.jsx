@@ -45,19 +45,19 @@ const Navbar = () => {
   const isActive = (path) => location.pathname === path;
 
   return (
-    <nav className="bg-hoop-court/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <nav className="bg-hoop-court/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 transition-all w-full max-w-full overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
           {/* Brand Logo */}
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-600/30 group-hover:scale-105 transition-transform">
-              <Flame className="w-6 h-6 text-white animate-pulse" />
+          <Link to="/" className="flex items-center gap-2 sm:gap-3 group min-w-0 flex-shrink">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-600/30 group-hover:scale-105 transition-transform flex-shrink-0">
+              <Flame className="w-4 h-4 sm:w-6 sm:h-6 text-white animate-pulse" />
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-digital text-xl font-black tracking-wider text-white">HOOP</span>
-                <span className="font-digital text-xl font-black tracking-wider text-orange-500">SCORE</span>
-                <span className="text-[10px] uppercase font-bold bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded border border-orange-500/30 tracking-wider">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <span className="font-digital text-base sm:text-xl font-black tracking-wider text-white">HOOP</span>
+                <span className="font-digital text-base sm:text-xl font-black tracking-wider text-orange-500">SCORE</span>
+                <span className="text-[9px] sm:text-[10px] uppercase font-bold bg-orange-500/20 text-orange-400 px-1 py-0.2 sm:px-1.5 sm:py-0.5 rounded border border-orange-500/30 tracking-wider">
                   3X3
                 </span>
               </div>
@@ -89,10 +89,10 @@ const Navbar = () => {
           </div>
 
           {/* Right Action Icons & User Status */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-1 sm:space-x-2.5 flex-shrink-0">
             {/* Live Socket Connection Status Dot */}
             <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium border ${
+              className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-mono font-medium border flex-shrink-0 ${
                 isConnected
                   ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60'
                   : 'bg-red-950/60 text-red-400 border-red-800/60 animate-pulse'
@@ -100,7 +100,7 @@ const Navbar = () => {
               title={isConnected ? 'Realtime Engine Synced' : 'Disconnected, Reconnecting...'}
             >
               <span
-                className={`w-2 h-2 rounded-full ${
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
                   isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'
                 }`}
               />
@@ -110,7 +110,7 @@ const Navbar = () => {
             {/* Sound Synthesizer Toggle */}
             <button
               onClick={toggleSound}
-              className={`p-2 rounded-lg border text-sm transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-lg border text-sm transition-colors flex-shrink-0 ${
                 soundEnabled
                   ? 'bg-slate-800 text-amber-400 border-amber-500/30 hover:bg-slate-700'
                   : 'bg-slate-900 text-slate-500 border-slate-800 hover:bg-slate-800'
@@ -124,7 +124,7 @@ const Navbar = () => {
             {/* Settings Link */}
             <Link
               to="/settings"
-              className="p-2 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="p-1.5 sm:p-2 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex-shrink-0"
               title="Settings"
             >
               <Settings className="w-4 h-4" />
@@ -132,7 +132,7 @@ const Navbar = () => {
 
             {/* User Profile or Login */}
             {user ? (
-              <div className="flex items-center space-x-2 pl-1 border-l border-slate-800">
+              <div className="flex items-center space-x-1 sm:space-x-2 pl-1 border-l border-slate-800 flex-shrink-0">
                 <div className="hidden lg:flex flex-col text-right">
                   <span className="text-xs font-semibold text-slate-200 truncate max-w-[120px]">
                     {user.name}
@@ -151,7 +151,7 @@ const Navbar = () => {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="p-2 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-red-400 hover:bg-red-950/30 hover:border-red-800/40 transition-colors"
+                  className="p-1.5 sm:p-2 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-red-400 hover:bg-red-950/30 hover:border-red-800/40 transition-colors flex-shrink-0"
                   title="Sign Out"
                 >
                   <LogOut className="w-4 h-4" />
@@ -160,7 +160,7 @@ const Navbar = () => {
             ) : (
               <Link
                 to="/login"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold shadow-md shadow-orange-600/30 transition-all"
+                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs sm:text-sm font-semibold shadow-md shadow-orange-600/30 transition-all flex-shrink-0"
               >
                 <LogIn className="w-4 h-4" />
                 <span className="hidden sm:inline">Sign In</span>

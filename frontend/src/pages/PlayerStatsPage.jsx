@@ -273,7 +273,7 @@ const PlayerStatsPage = () => {
                 <th className="py-3 px-3 text-center">PPG</th>
                 <th className="py-3 px-3 text-center">1PT</th>
                 <th className="py-3 px-3 text-center">2PT</th>
-                <th className="py-3 px-3 text-center">REB</th>
+                <th className="py-3 px-3 text-center font-bold text-amber-400">3PT</th>
                 <th className="py-3 px-3 text-center">AST</th>
                 <th className="py-3 px-3 text-center">STL</th>
                 <th className="py-3 px-3 text-center">BLK</th>
@@ -308,7 +308,7 @@ const PlayerStatsPage = () => {
                           <span className="font-digital font-bold text-orange-400 group-hover/pts:text-orange-300 text-base">
                             {points}
                           </span>
-                          <Edit2 className="w-2.5 h-2.5 text-orange-400/60 group-hover/pts:text-orange-300" />
+                          <Edit2 className="w-2.5 h-2.5 text-orange-400/60 group-hover/pts:text-orange-300 flex-shrink-0" />
                         </button>
                       ) : (
                         <span className="font-digital font-bold text-orange-400 text-base">
@@ -319,21 +319,23 @@ const PlayerStatsPage = () => {
                     <td className="py-3 px-3 text-center text-amber-300 font-bold">{ppg}</td>
                     <td className="py-3 px-3 text-center text-slate-300">{p.stats?.onePoints || 0}</td>
                     <td className="py-3 px-3 text-center text-slate-300">{p.stats?.twoPoints || 0}</td>
-                    <td className="py-3 px-3 text-center text-slate-300">{p.stats?.rebounds || 0}</td>
+                    <td className="py-3 px-3 text-center font-bold text-amber-300">{p.stats?.threePoints || 0}</td>
                     <td className="py-3 px-3 text-center text-slate-300">{p.stats?.assists || 0}</td>
                     <td className="py-3 px-3 text-center text-slate-300">{p.stats?.steals || 0}</td>
                     <td className="py-3 px-3 text-center text-slate-300">{p.stats?.blocks || 0}</td>
                     <td className="py-3 px-3 text-center font-bold text-red-400">{p.stats?.fouls || 0}</td>
                     {canEditStats && (
                       <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => openEditStatsModal(p)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 hover:text-orange-300 transition-colors font-bold text-xs"
-                          title="Edit Player Scores & Stats"
-                        >
-                          <Flame className="w-3 h-3" />
-                          <span className="hidden sm:inline">Edit Score</span>
-                        </button>
+                        <div className="flex items-center justify-end whitespace-nowrap">
+                          <button
+                            onClick={() => openEditStatsModal(p)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 hover:text-orange-300 transition-colors font-bold text-xs"
+                            title="Edit Player Scores & Stats"
+                          >
+                            <Flame className="w-3 h-3 flex-shrink-0" />
+                            <span className="hidden sm:inline">Edit Score</span>
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>

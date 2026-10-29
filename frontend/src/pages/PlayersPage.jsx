@@ -219,14 +219,15 @@ const PlayersPage = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 overflow-x-hidden">
       {/* Header and Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
-            <Users className="w-8 h-8 text-orange-500" /> Player Directory & Stats
+          <h1 className="text-xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2">
+            <Users className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500 flex-shrink-0" />
+            <span>Player Directory & Stats</span>
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Registered 3x3 athletes, positional classifications, and career tournament metrics
           </p>
         </div>
@@ -234,7 +235,7 @@ const PlayersPage = () => {
         {isAdmin && (
           <button
             onClick={openCreateModal}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95 whitespace-nowrap self-start sm:self-auto"
+            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95 whitespace-nowrap self-start sm:self-auto"
           >
             <Plus className="w-4 h-4" /> Add Player
           </button>
@@ -242,8 +243,8 @@ const PlayersPage = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
-        <form onSubmit={handleSearchSubmit} className="relative flex-1 min-w-[200px]">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <form onSubmit={handleSearchSubmit} className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -254,12 +255,12 @@ const PlayersPage = () => {
           />
         </form>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           {/* Position Filter */}
           <select
             value={selectedPosition}
             onChange={(e) => setSelectedPosition(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500"
+            className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500"
           >
             <option value="">All Positions</option>
             <option value="Guard">Guard</option>
@@ -271,7 +272,7 @@ const PlayersPage = () => {
           <select
             value={selectedTeam}
             onChange={(e) => setSelectedTeam(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500 max-w-[180px]"
+            className="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-orange-500 max-w-full sm:max-w-[180px]"
           >
             <option value="">All Teams</option>
             {teams.map((t) => (
@@ -289,37 +290,37 @@ const PlayersPage = () => {
           <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : players.length > 0 ? (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl w-full max-w-full">
+          <div className="overflow-x-auto w-full max-w-full">
+            <table className="w-full min-w-[680px] text-left border-collapse text-xs sm:text-sm">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-mono text-xs uppercase tracking-wider">
-                  <th className="py-3.5 px-4">#</th>
-                  <th className="py-3.5 px-4">Player</th>
-                  <th className="py-3.5 px-4">Team</th>
+                  <th className="py-3.5 px-3 sm:px-4">#</th>
+                  <th className="py-3.5 px-3 sm:px-4">Player</th>
+                  <th className="py-3.5 px-3 sm:px-4">Team</th>
                   <th className="py-3.5 px-3">Position</th>
-                  <th className="py-3.5 px-3 text-center">Games</th>
-                  <th className="py-3.5 px-3 text-center font-bold text-orange-400">PTS</th>
-                  <th className="py-3.5 px-3 text-center">1PT</th>
-                  <th className="py-3.5 px-3 text-center">2PT</th>
-                  <th className="py-3.5 px-3 text-center">REB</th>
-                  <th className="py-3.5 px-3 text-center">AST</th>
-                  <th className="py-3.5 px-3 text-center">STL</th>
-                  <th className="py-3.5 px-3 text-center">BLK</th>
-                  <th className="py-3.5 px-3 text-center text-red-400">FOULS</th>
-                  {(canEditStats || isAdmin) && <th className="py-3.5 px-4 text-right">Actions</th>}
+                  <th className="py-3.5 px-2.5 text-center">Games</th>
+                  <th className="py-3.5 px-2.5 text-center font-bold text-orange-400">PTS</th>
+                  <th className="py-3.5 px-2.5 text-center">1PT</th>
+                  <th className="py-3.5 px-2.5 text-center">2PT</th>
+                  <th className="py-3.5 px-2.5 text-center font-bold text-amber-400">3PT</th>
+                  <th className="py-3.5 px-2.5 text-center">AST</th>
+                  <th className="py-3.5 px-2.5 text-center">STL</th>
+                  <th className="py-3.5 px-2.5 text-center">BLK</th>
+                  <th className="py-3.5 px-2.5 text-center text-red-400">FOULS</th>
+                  {(canEditStats || isAdmin) && <th className="py-3.5 px-3 sm:px-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono text-xs sm:text-sm">
                 {players.map((p) => (
                   <tr key={p._id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-digital font-bold text-amber-400 text-base">
+                    <td className="py-3.5 px-3 sm:px-4 font-digital font-bold text-amber-400 text-base">
                       #{p.jerseyNumber}
                     </td>
-                    <td className="py-3.5 px-4 font-sans font-bold text-white whitespace-nowrap">
+                    <td className="py-3.5 px-3 sm:px-4 font-sans font-bold text-white whitespace-nowrap">
                       {p.name}
                     </td>
-                    <td className="py-3.5 px-4 font-sans whitespace-nowrap">
+                    <td className="py-3.5 px-3 sm:px-4 font-sans whitespace-nowrap">
                       <span
                         className="px-2 py-0.5 rounded text-xs font-bold border border-slate-700 bg-slate-950"
                         style={{ color: p.teamId?.primaryColor || '#fff' }}
@@ -332,18 +333,18 @@ const PlayersPage = () => {
                         {p.position}
                       </span>
                     </td>
-                    <td className="py-3.5 px-3 text-center text-slate-300">{p.stats?.games || 0}</td>
-                    <td className="py-3.5 px-3 text-center">
+                    <td className="py-3.5 px-2.5 text-center text-slate-300">{p.stats?.games || 0}</td>
+                    <td className="py-3.5 px-2.5 text-center">
                       {canEditStats ? (
                         <button
                           onClick={() => openEditStatsModal(p)}
                           title="Click to edit player score & stats"
-                          className="group/pts inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-950/40 hover:bg-orange-500/20 border border-orange-500/40 hover:border-orange-500 transition-all cursor-pointer shadow-sm"
+                          className="group/pts inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-950/40 hover:bg-orange-500/20 border border-orange-500/40 hover:border-orange-500 transition-all cursor-pointer shadow-sm"
                         >
                           <span className="font-digital font-black text-orange-400 group-hover/pts:text-orange-300 text-base">
                             {p.stats?.points || 0}
                           </span>
-                          <Edit2 className="w-2.5 h-2.5 text-orange-400/70 group-hover/pts:text-orange-300" />
+                          <Edit2 className="w-2.5 h-2.5 text-orange-400/70 group-hover/pts:text-orange-300 flex-shrink-0" />
                         </button>
                       ) : (
                         <span className="font-digital font-black text-orange-400 text-base">
@@ -351,23 +352,23 @@ const PlayersPage = () => {
                         </span>
                       )}
                     </td>
-                    <td className="py-3.5 px-3 text-center text-slate-300">{p.stats?.onePoints || 0}</td>
-                    <td className="py-3.5 px-3 text-center text-slate-300">{p.stats?.twoPoints || 0}</td>
-                    <td className="py-3.5 px-3 text-center text-slate-300">{p.stats?.rebounds || 0}</td>
-                    <td className="py-3.5 px-3 text-center text-slate-300">{p.stats?.assists || 0}</td>
-                    <td className="py-3.5 px-3 text-center text-slate-300">{p.stats?.steals || 0}</td>
-                    <td className="py-3.5 px-3 text-center text-slate-300">{p.stats?.blocks || 0}</td>
-                    <td className="py-3.5 px-3 text-center font-bold text-red-400">{p.stats?.fouls || 0}</td>
+                    <td className="py-3.5 px-2.5 text-center text-slate-300">{p.stats?.onePoints || 0}</td>
+                    <td className="py-3.5 px-2.5 text-center text-slate-300">{p.stats?.twoPoints || 0}</td>
+                    <td className="py-3.5 px-2.5 text-center font-bold text-amber-300">{p.stats?.threePoints || 0}</td>
+                    <td className="py-3.5 px-2.5 text-center text-slate-300">{p.stats?.assists || 0}</td>
+                    <td className="py-3.5 px-2.5 text-center text-slate-300">{p.stats?.steals || 0}</td>
+                    <td className="py-3.5 px-2.5 text-center text-slate-300">{p.stats?.blocks || 0}</td>
+                    <td className="py-3.5 px-2.5 text-center font-bold text-red-400">{p.stats?.fouls || 0}</td>
                     {(canEditStats || isAdmin) && (
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-3.5 px-3 sm:px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                           {canEditStats && (
                             <button
                               onClick={() => openEditStatsModal(p)}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 hover:text-orange-300 transition-colors font-bold text-xs"
+                              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 hover:text-orange-300 transition-colors font-bold text-xs"
                               title="Edit Player Scores & Stats"
                             >
-                              <Flame className="w-3.5 h-3.5" />
+                              <Flame className="w-3.5 h-3.5 flex-shrink-0" />
                               <span className="hidden sm:inline">Edit Score</span>
                             </button>
                           )}
@@ -375,14 +376,14 @@ const PlayersPage = () => {
                             <>
                               <button
                                 onClick={() => openEditModal(p)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex-shrink-0"
                                 title="Edit Player Details"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => handleDelete(p._id, p.name)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/30 transition-colors"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/30 transition-colors flex-shrink-0"
                                 title="Delete Player"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
