@@ -95,9 +95,9 @@ const createPlayer = async (req, res) => {
   }
 };
 
-// @desc    Update player
+// @desc    Update player (metadata & stats/scores)
 // @route   PUT /api/players/:id
-// @access  Private/Admin
+// @access  Private/Admin or Scorer
 const updatePlayer = async (req, res) => {
   try {
     const player = await Player.findById(req.params.id);
@@ -109,13 +109,37 @@ const updatePlayer = async (req, res) => {
     if (req.body.teamId && req.body.teamId !== player.teamId.toString()) {
       await Team.findByIdAndUpdate(player.teamId, { $pull: { players: player._id } });
       await Team.findByIdAndUpdate(req.body.teamId, { $addToSet: { players: player._id } });
+      player.teamId = req.body.teamId;
     }
 
-    const updatedPlayer = await Player.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    }).populate('teamId');
+    // Update basic fields if provided
+    if (req.body.name !== undefined) player.name = req.body.name.trim();
+    if (req.body.jerseyNumber !== undefined) player.jerseyNumber = Number(req.body.jerseyNumber);
+    if (req.body.position !== undefined) player.position = req.body.position;
+    if (req.body.profileImage !== undefined) player.profileImage = req.body.profileImage;
+    if (req.body.isCaptain !== undefined) player.isCaptain = Boolean(req.body.isCaptain);
+    if (req.body.isViceCaptain !== undefined) player.isViceCaptain = Boolean(req.body.isViceCaptain);
 
+    // If stats / scores are provided, safely update them
+    if (req.body.stats && typeof req.body.stats === 'object') {
+      if (!player.stats) player.stats = {};
+      const s = req.body.stats;
+      if (s.games !== undefined) player.stats.games = Math.max(0, Number(s.games) || 0);
+      if (s.points !== undefined) player.stats.points = Math.max(0, Number(s.points) || 0);
+      if (s.onePoints !== undefined) player.stats.onePoints = Math.max(0, Number(s.onePoints) || 0);
+      if (s.twoPoints !== undefined) player.stats.twoPoints = Math.max(0, Number(s.twoPoints) || 0);
+      if (s.threePoints !== undefined) player.stats.threePoints = Math.max(0, Number(s.threePoints) || 0);
+      if (s.rebounds !== undefined) player.stats.rebounds = Math.max(0, Number(s.rebounds) || 0);
+      if (s.assists !== undefined) player.stats.assists = Math.max(0, Number(s.assists) || 0);
+      if (s.steals !== undefined) player.stats.steals = Math.max(0, Number(s.steals) || 0);
+      if (s.blocks !== undefined) player.stats.blocks = Math.max(0, Number(s.blocks) || 0);
+      if (s.fouls !== undefined) player.stats.fouls = Math.max(0, Number(s.fouls) || 0);
+      if (s.minutes !== undefined) player.stats.minutes = Math.max(0, Number(s.minutes) || 0);
+    }
+
+    await player.save();
+
+    const updatedPlayer = await Player.findById(player._id).populate('teamId');
     res.status(200).json({ success: true, data: updatedPlayer });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

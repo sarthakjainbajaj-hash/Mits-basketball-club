@@ -15,6 +15,9 @@ import {
   Plus,
   Trash2,
   X,
+  Edit2,
+  Calculator,
+  Check,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -22,6 +25,7 @@ const TeamDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin, isScorer } = useAuth();
+  const canEditStats = isAdmin || isScorer;
   const [team, setTeam] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -34,6 +38,24 @@ const TeamDetailsPage = () => {
     position: 'Guard',
     isCaptain: false,
     isViceCaptain: false,
+  });
+
+  // Edit Player Stats Modal State
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  const [selectedPlayerForStats, setSelectedPlayerForStats] = useState(null);
+  const [savingStats, setSavingStats] = useState(false);
+  const [statsFormData, setStatsFormData] = useState({
+    games: 0,
+    points: 0,
+    onePoints: 0,
+    twoPoints: 0,
+    threePoints: 0,
+    rebounds: 0,
+    assists: 0,
+    steals: 0,
+    blocks: 0,
+    fouls: 0,
+    minutes: 0,
   });
 
   useEffect(() => {
@@ -117,6 +139,68 @@ const TeamDetailsPage = () => {
       fetchTeamDetails();
     } catch (err) {
       setToast({ message: err.message || 'Failed to remove player', type: 'error' });
+    }
+  };
+
+  const openEditStatsModal = (player) => {
+    setSelectedPlayerForStats(player);
+    setStatsFormData({
+      games: player.stats?.games ?? 0,
+      points: player.stats?.points ?? 0,
+      onePoints: player.stats?.onePoints ?? 0,
+      twoPoints: player.stats?.twoPoints ?? 0,
+      threePoints: player.stats?.threePoints ?? 0,
+      rebounds: player.stats?.rebounds ?? 0,
+      assists: player.stats?.assists ?? 0,
+      steals: player.stats?.steals ?? 0,
+      blocks: player.stats?.blocks ?? 0,
+      fouls: player.stats?.fouls ?? 0,
+      minutes: player.stats?.minutes ?? 0,
+    });
+    setIsStatsModalOpen(true);
+  };
+
+  const handleStatChange = (field, val) => {
+    const num = Math.max(0, parseInt(val, 10) || 0);
+    setStatsFormData((prev) => ({ ...prev, [field]: num }));
+  };
+
+  const adjustPoints = (delta) => {
+    setStatsFormData((prev) => ({
+      ...prev,
+      points: Math.max(0, (Number(prev.points) || 0) + delta),
+    }));
+  };
+
+  const autoCalcPoints = () => {
+    const pts1 = Number(statsFormData.onePoints) || 0;
+    const pts2 = Number(statsFormData.twoPoints) || 0;
+    const pts3 = Number(statsFormData.threePoints) || 0;
+    const total = pts1 + pts2 * 2 + pts3 * 3;
+    setStatsFormData((prev) => ({ ...prev, points: total }));
+  };
+
+  const handleStatsSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedPlayerForStats) return;
+    try {
+      setSavingStats(true);
+      await playerApi.update(selectedPlayerForStats._id, {
+        stats: statsFormData,
+      });
+      setToast({
+        message: `Updated scores & stats for ${selectedPlayerForStats.name}!`,
+        type: 'success',
+      });
+      setIsStatsModalOpen(false);
+      fetchTeamDetails();
+    } catch (err) {
+      setToast({
+        message: err.message || 'Failed to update stats',
+        type: 'error',
+      });
+    } finally {
+      setSavingStats(false);
     }
   };
 
@@ -368,13 +452,39 @@ const TeamDetailsPage = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
                     <div className="text-right font-mono text-xs">
-                      <span className="text-orange-400 font-bold font-digital text-base">
-                        {p.stats?.points || 0}
-                      </span>
-                      <span className="text-slate-500 ml-1">PTS</span>
+                      {canEditStats ? (
+                        <button
+                          onClick={() => openEditStatsModal(p)}
+                          title="Click to edit player score & stats"
+                          className="group/pts inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-orange-950/40 hover:bg-orange-500/20 border border-orange-500/40 hover:border-orange-500 transition-all cursor-pointer"
+                        >
+                          <span className="text-orange-400 group-hover/pts:text-orange-300 font-bold font-digital text-base">
+                            {p.stats?.points || 0}
+                          </span>
+                          <span className="text-slate-500 text-[11px]">PTS</span>
+                          <Edit2 className="w-2.5 h-2.5 text-orange-400/60 group-hover/pts:text-orange-300" />
+                        </button>
+                      ) : (
+                        <>
+                          <span className="text-orange-400 font-bold font-digital text-base">
+                            {p.stats?.points || 0}
+                          </span>
+                          <span className="text-slate-500 ml-1">PTS</span>
+                        </>
+                      )}
                     </div>
+
+                    {canEditStats && (
+                      <button
+                        onClick={() => openEditStatsModal(p)}
+                        className="p-1.5 rounded-lg text-orange-400 hover:text-white hover:bg-orange-600/30 border border-orange-500/30 transition-colors"
+                        title="Edit Player Scores & Stats"
+                      >
+                        <Flame className="w-3.5 h-3.5" />
+                      </button>
+                    )}
 
                     {isAdmin && (
                       <button
@@ -597,6 +707,274 @@ const TeamDetailsPage = () => {
                   className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-lg shadow-orange-600/30 transition-all"
                 >
                   Add Player
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Player Scores & Stats Modal */}
+      {isStatsModalOpen && selectedPlayerForStats && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-600/20 border border-orange-500/40 flex items-center justify-center text-orange-400">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base sm:text-lg flex items-center gap-2">
+                    Edit Scores & Stats
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                    <span className="text-amber-400 font-bold">#{selectedPlayerForStats.jerseyNumber}</span>
+                    <span className="text-white font-semibold">{selectedPlayerForStats.name}</span>
+                    <span>•</span>
+                    <span className="text-slate-300">{team?.name || 'Team Roster'}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsStatsModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleStatsSubmit} className="space-y-4">
+              {/* Primary Total Points (PTS) Card */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-950/40 via-amber-950/20 to-slate-950/60 border border-orange-500/40 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="text-xs font-mono uppercase font-black text-orange-400 tracking-wider flex items-center gap-1.5">
+                      <Flame className="w-4 h-4 text-orange-500" /> Total Points (PTS)
+                    </label>
+                    <p className="text-[11px] text-slate-400">
+                      Primary scoring metric shown on leaderboards & tables
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={autoCalcPoints}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/40 text-xs font-mono font-bold transition-all self-start sm:self-auto"
+                    title="Calculate: 1PT + 2×2PT + 3×3PT"
+                  >
+                    <Calculator className="w-3.5 h-3.5" />
+                    Auto-Calculate
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      min={0}
+                      value={statsFormData.points}
+                      onChange={(e) => handleStatChange('points', e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-orange-500/50 font-digital font-black text-2xl text-orange-400 tracking-wider focus:border-orange-400 focus:ring-1 focus:ring-orange-500 outline-none"
+                      required
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 font-mono text-xs font-bold text-slate-500 uppercase">
+                      PTS
+                    </span>
+                  </div>
+
+                  {/* Quick Delta Buttons */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => adjustPoints(-1)}
+                      className="px-2.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs font-bold border border-slate-700 active:scale-95 transition-all"
+                      title="Minus 1 point"
+                    >
+                      -1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustPoints(1)}
+                      className="px-2.5 py-2.5 rounded-xl bg-orange-600/40 hover:bg-orange-600/60 text-orange-200 font-mono text-xs font-bold border border-orange-500/40 active:scale-95 transition-all"
+                      title="Plus 1 point"
+                    >
+                      +1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustPoints(2)}
+                      className="px-2.5 py-2.5 rounded-xl bg-orange-600/40 hover:bg-orange-600/60 text-orange-200 font-mono text-xs font-bold border border-orange-500/40 active:scale-95 transition-all"
+                      title="Plus 2 points"
+                    >
+                      +2
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adjustPoints(3)}
+                      className="px-2.5 py-2.5 rounded-xl bg-orange-600/40 hover:bg-orange-600/60 text-orange-200 font-mono text-xs font-bold border border-orange-500/40 active:scale-95 transition-all"
+                      title="Plus 3 points"
+                    >
+                      +3
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detailed Breakdown Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* 1PT Shots */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-slate-400">
+                    1-Point Shots (1PT)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.onePoints}
+                    onChange={(e) => handleStatChange('onePoints', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+
+                {/* 2PT Shots */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-slate-400">
+                    2-Point Shots (2PT)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.twoPoints}
+                    onChange={(e) => handleStatChange('twoPoints', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+
+                {/* 3PT Shots */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-slate-400">
+                    3-Point Shots (3PT)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.threePoints}
+                    onChange={(e) => handleStatChange('threePoints', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+
+                {/* Games */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-slate-400">
+                    Games Played (GP)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.games}
+                    onChange={(e) => handleStatChange('games', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+
+                {/* Rebounds */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-slate-400">
+                    Rebounds (REB)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.rebounds}
+                    onChange={(e) => handleStatChange('rebounds', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+
+                {/* Assists */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-slate-400">
+                    Assists (AST)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.assists}
+                    onChange={(e) => handleStatChange('assists', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+
+                {/* Steals */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-slate-400">
+                    Steals (STL)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.steals}
+                    onChange={(e) => handleStatChange('steals', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+
+                {/* Blocks */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-slate-400">
+                    Blocks (BLK)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.blocks}
+                    onChange={(e) => handleStatChange('blocks', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+
+                {/* Fouls */}
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                  <label className="block text-[11px] font-mono uppercase font-bold text-red-400">
+                    Personal Fouls (FOULS)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={statsFormData.fouls}
+                    onChange={(e) => handleStatChange('fouls', e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-red-300 font-mono text-sm focus:border-red-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsStatsModalOpen(false)}
+                  disabled={savingStats}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingStats}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+                >
+                  {savingStats ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Save Score & Stats</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
