@@ -24,8 +24,24 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['admin', 'scorer', 'viewer'],
+      enum: ['superadmin', 'admin', 'scorer', 'viewer'],
       default: 'viewer',
+    },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
+    isSuspended: {
+      type: Boolean,
+      default: false,
+    },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockUntil: {
+      type: Date,
+      default: null,
     },
   },
   {

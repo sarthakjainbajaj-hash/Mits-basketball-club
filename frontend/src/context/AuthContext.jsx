@@ -70,9 +70,24 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('hoopscore_user');
   };
 
-  const isAdmin = user?.role === 'admin';
-  const isScorer = user?.role === 'scorer' || user?.role === 'admin';
+  const isSuperAdmin = user?.role === 'superadmin';
+  const isAdmin = user?.role === 'admin' || isSuperAdmin;
+  const isScorer = user?.role === 'scorer' || isAdmin;
   const isViewer = user?.role === 'viewer';
+
+  // Authorization helper to check if authenticated user can modify scores for this specific match
+  const canScoreMatch = (match) => {
+    if (!user || !match) return false;
+    if (isSuperAdmin || user.role === 'admin') return true;
+
+    if (user.role === 'scorer') {
+      const assignedId = (match.assignedScorer?._id || match.assignedScorer)?.toString();
+      const myId = (user._id || user.id)?.toString();
+      return Boolean(assignedId && myId && assignedId === myId);
+    }
+
+    return false;
+  };
 
   return (
     <AuthContext.Provider
@@ -83,9 +98,11 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        isSuperAdmin,
         isAdmin,
         isScorer,
         isViewer,
+        canScoreMatch,
       }}
     >
       {children}

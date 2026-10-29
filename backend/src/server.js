@@ -1,6 +1,8 @@
 const http = require('http');
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
 const { Server } = require('socket.io');
 
@@ -23,7 +25,7 @@ const server = http.createServer(app);
 const path = require('path');
 const fs = require('fs');
 
-// Configure Socket.IO
+// Configure Socket.IO & CORS
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 const allowedOrigins = [
   clientUrl,
@@ -46,7 +48,7 @@ const corsOriginHandler = (origin, callback) => {
   ) {
     return callback(null, true);
   }
-  return callback(null, true);
+  return callback(new Error(`CORS blocked for origin: ${origin}`));
 };
 
 const io = new Server(server, {
@@ -63,6 +65,31 @@ app.set('io', io);
 // Initialize match socket room handlers
 initMatchSocket(io);
 
+// Security Headers via Helmet
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// Rate Limiter for Authentication endpoints to mitigate brute force & credential stuffing
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 25, // Limit to 25 attempts per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many authentication attempts from this IP, please try again after 15 minutes.',
+  },
+});
+
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/auth/login', authLimiter);
+app.use('/auth/register', authLimiter);
+
 // Core Middleware
 app.use(
   cors({
@@ -70,8 +97,8 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Health Check Endpoints
 const mongoose = require('mongoose');

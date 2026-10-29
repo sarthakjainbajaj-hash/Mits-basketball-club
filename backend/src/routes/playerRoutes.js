@@ -15,11 +15,11 @@ router.get('/stats/leaderboard', getPlayerLeaderboard);
 
 router.route('/')
   .get(getPlayers)
-  .post(protect, authorize('admin', 'scorer'), createPlayer);
+  .post(protect, authorize('admin'), createPlayer);
 
 router.route('/:id')
   .get(getPlayerById)
-  .put(protect, authorize('admin', 'scorer'), updatePlayer)
-  .delete(protect, authorize('admin', 'scorer'), deletePlayer);
+  .put(protect, authorize('admin'), updatePlayer)
+  .delete(protect, authorize('admin'), deletePlayer);
 
 module.exports = router;

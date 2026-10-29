@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { matchApi } from '../api/matchApi';
 import { teamApi } from '../api/teamApi';
 import { tournamentApi } from '../api/tournamentApi';
+import { authApi } from '../api/authApi';
 import {
   Calendar,
   Clock,
@@ -24,6 +25,7 @@ const CreateMatchPage = () => {
 
   const [tournaments, setTournaments] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [scorers, setScorers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -40,6 +42,7 @@ const CreateMatchPage = () => {
     scheduledTime: '18:00',
     teamA: '',
     teamB: '',
+    assignedScorer: '',
     // Settings
     gameDuration: 600, // in seconds
     quarterDuration: 600,
@@ -106,12 +109,18 @@ const CreateMatchPage = () => {
   const fetchOptions = async () => {
     try {
       setLoading(true);
-      const [tRes, tmRes] = await Promise.all([tournamentApi.getAll(), teamApi.getAll()]);
+      const [tRes, tmRes, uRes] = await Promise.all([
+        tournamentApi.getAll(),
+        teamApi.getAll(),
+        authApi.getAllUsers().catch(() => ({ data: [] })),
+      ]);
       const availableTournaments = tRes?.data || [];
       const availableTeams = tmRes?.data || [];
+      const userList = uRes?.data || [];
 
       setTournaments(availableTournaments);
       setTeams(availableTeams);
+      setScorers(userList.filter((u) => ['scorer', 'admin', 'superadmin'].includes(u.role)));
 
       if (availableTeams.length >= 2) {
         const teamA = availableTeams[0];
@@ -287,6 +296,7 @@ const CreateMatchPage = () => {
         scheduledTime: formData.scheduledTime,
         teamA: formData.teamA,
         teamB: formData.teamB,
+        assignedScorer: formData.assignedScorer || null,
         teamA_starters: teamAStarters,
         teamA_substitutes: teamASubstitutes,
         teamB_starters: teamBStarters,
@@ -746,6 +756,33 @@ const CreateMatchPage = () => {
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Official Match Scorer Assignment */}
+        <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-mono font-bold uppercase tracking-wider text-orange-400 flex items-center gap-2">
+              <Shield className="w-4 h-4" /> Official Scorer Assignment
+            </h2>
+            <span className="text-xs font-mono text-slate-400">Security Control</span>
+          </div>
+          <p className="text-xs text-slate-400">
+            Specify the official scorer authorized to operate the live clock, shot clock, and score inputs for this match. If unassigned, only administrators can modify match scores.
+          </p>
+          <div>
+            <select
+              value={formData.assignedScorer}
+              onChange={(e) => setFormData({ ...formData, assignedScorer: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:border-orange-500 outline-none font-mono"
+            >
+              <option value="">-- No Specific Scorer (Administrator Only Access) --</option>
+              {scorers.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.name} ({s.email}) — [{s.role.toUpperCase()}]
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

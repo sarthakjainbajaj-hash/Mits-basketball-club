@@ -6,20 +6,29 @@ let mongoMemoryServer = null;
 const seedInitialUsers = async () => {
   try {
     const User = require('../models/User');
-    let admin = await User.findOne({ email: 'admin@hoopscore.com' });
-    if (!admin) {
-      console.log('[DB] Seeding default Admin user (Sarthak Bajaj)...');
+    const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'admin@hoopscore.com').toLowerCase();
+
+    let owner = await User.findOne({ email: superAdminEmail });
+    if (!owner) {
+      console.log(`[DB Security] Initializing Super Admin owner (${superAdminEmail})...`);
       await User.create({
-        name: 'Sarthak Bajaj',
-        email: 'admin@hoopscore.com',
-        password: 'admin123',
-        role: 'admin',
+        name: 'Sarthak Bajaj (Owner)',
+        email: superAdminEmail,
+        password: process.env.SUPER_ADMIN_PASSWORD || 'admin123',
+        role: 'superadmin',
+        tokenVersion: 0,
       });
-      console.log('[DB] Default Admin user created: admin@hoopscore.com / admin123');
-    } else if (admin.name !== 'Sarthak Bajaj') {
-      admin.name = 'Sarthak Bajaj';
-      await admin.save();
-      console.log('[DB] Admin user updated to Sarthak Bajaj');
+      console.log(`[DB Security] Super Admin account created.`);
+    } else {
+      let needsSave = false;
+      if (owner.role !== 'superadmin') {
+        owner.role = 'superadmin';
+        needsSave = true;
+      }
+      if (needsSave) {
+        await owner.save();
+        console.log(`[DB Security] Super Admin role verified for owner (${superAdminEmail}).`);
+      }
     }
 
     let scorer = await User.findOne({ email: 'scorer@hoopscore.com' });

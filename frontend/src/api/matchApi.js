@@ -8,6 +8,11 @@ export const matchApi = {
   delete: (id) => axiosClient.delete(`/matches/${id}`),
   getSummary: (id) => axiosClient.get(`/matches/${id}/summary`),
 
+  // Scorer Assignment & Security Audit
+  assignScorer: (id, scorerId) => axiosClient.put(`/matches/${id}/assign-scorer`, { scorerId }),
+  getAuditLogs: (id) => axiosClient.get(`/matches/${id}/audit-logs`),
+  restoreScore: (id, auditLogId, reason) => axiosClient.post(`/matches/${id}/restore-score`, { auditLogId, reason }),
+
   // Live Scoreboard Operations
   start: (id) => axiosClient.post(`/matches/${id}/start`),
   pause: (id, payload = {}) => axiosClient.post(`/matches/${id}/pause`, payload),

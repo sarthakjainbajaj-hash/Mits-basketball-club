@@ -2,6 +2,8 @@ const Match = require('../models/Match');
 const MatchEvent = require('../models/MatchEvent');
 const Team = require('../models/Team');
 const Player = require('../models/Player');
+const User = require('../models/User');
+const ScoreAuditLog = require('../models/ScoreAuditLog');
 
 // @desc    Get matches with search & filters (including matchType: 3x3 or 5x5)
 // @route   GET /api/matches
@@ -44,6 +46,7 @@ const getMatches = async (req, res) => {
       .populate('teamA', 'name shortName logo primaryColor secondaryColor')
       .populate('teamB', 'name shortName logo primaryColor secondaryColor')
       .populate('tournamentId', 'name venue')
+      .populate('assignedScorer', 'name email role')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -72,7 +75,8 @@ const getMatchById = async (req, res) => {
       .populate('teamA_roster.starters.player', 'name jerseyNumber position profileImage')
       .populate('teamA_roster.substitutes.player', 'name jerseyNumber position profileImage')
       .populate('teamB_roster.starters.player', 'name jerseyNumber position profileImage')
-      .populate('teamB_roster.substitutes.player', 'name jerseyNumber position profileImage');
+      .populate('teamB_roster.substitutes.player', 'name jerseyNumber position profileImage')
+      .populate('assignedScorer', 'name email role');
 
     if (!match) {
       return res.status(404).json({ success: false, message: 'Match not found' });
@@ -189,6 +193,7 @@ const createMatch = async (req, res) => {
       scheduledTime,
       teamA,
       teamB,
+      assignedScorer,
       teamA_starters = [],
       teamA_substitutes = [],
       teamB_starters = [],
@@ -408,6 +413,20 @@ const createMatch = async (req, res) => {
 
     const initialPeriod = matchType === '3x3' ? 'REGULATION' : (matchStructure === 'HALVES' ? 'H1' : 'Q1');
 
+    let validScorerId = null;
+    const scorerHistory = [];
+    if (assignedScorer) {
+      const userScorer = await User.findById(assignedScorer);
+      if (userScorer && ['scorer', 'admin', 'superadmin'].includes(userScorer.role)) {
+        validScorerId = userScorer._id;
+        scorerHistory.push({
+          scorer: userScorer._id,
+          assignedBy: req.user._id,
+          assignedAt: new Date(),
+        });
+      }
+    }
+
     const match = await Match.create({
       matchType,
       tournamentId: tournamentId || null,
@@ -417,6 +436,8 @@ const createMatch = async (req, res) => {
       scheduledTime: scheduledTime || '18:00',
       teamA,
       teamB,
+      assignedScorer: validScorerId,
+      assignedScorerHistory: scorerHistory,
       teamA_roster: {
         starters: formattedAStarters,
         substitutes: formattedASubs,
@@ -457,7 +478,8 @@ const createMatch = async (req, res) => {
     const populatedMatch = await Match.findById(match._id)
       .populate('teamA', 'name shortName logo primaryColor secondaryColor')
       .populate('teamB', 'name shortName logo primaryColor secondaryColor')
-      .populate('tournamentId', 'name venue');
+      .populate('tournamentId', 'name venue')
+      .populate('assignedScorer', 'name email role');
 
     res.status(201).json({ success: true, data: populatedMatch });
   } catch (error) {
@@ -465,9 +487,9 @@ const createMatch = async (req, res) => {
   }
 };
 
-// @desc    Update match settings / details
+// @desc    Update match settings / details (Allowlisted to prevent Mass Assignment)
 // @route   PUT /api/matches/:id
-// @access  Private/Admin or Scorer
+// @access  Private/Admin
 const updateMatch = async (req, res) => {
   try {
     const matchToUpdate = await Match.findById(req.params.id);
@@ -475,37 +497,274 @@ const updateMatch = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Match not found' });
     }
 
+    // Explicit field allowlist to strictly prevent Mass Assignment vulnerabilities
+    const allowedFields = [
+      'matchName',
+      'venue',
+      'scheduledDate',
+      'scheduledTime',
+      'assignedScorer',
+      'gameDuration',
+      'remainingTime',
+      'shotClockDuration',
+      'shotClockRemaining',
+      'targetScore',
+      'foulLimit',
+      'timeoutDuration',
+      'currentPeriod',
+      'settings',
+    ];
+
+    const safeUpdate = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) {
+        safeUpdate[key] = req.body[key];
+      }
+    }
+
+    // Scorer reassignment check
+    if (req.body.assignedScorer !== undefined) {
+      if (req.body.assignedScorer) {
+        const scorerUser = await User.findById(req.body.assignedScorer);
+        if (!scorerUser || !['scorer', 'admin', 'superadmin'].includes(scorerUser.role)) {
+          return res.status(400).json({ success: false, message: 'Assigned scorer must be an active scorer or admin' });
+        }
+        safeUpdate.assignedScorer = scorerUser._id;
+        matchToUpdate.assignedScorerHistory.push({
+          scorer: scorerUser._id,
+          assignedBy: req.user._id,
+          assignedAt: new Date(),
+        });
+      } else {
+        safeUpdate.assignedScorer = null;
+        matchToUpdate.assignedScorerHistory.push({
+          scorer: null,
+          assignedBy: req.user._id,
+          assignedAt: new Date(),
+        });
+      }
+      safeUpdate.assignedScorerHistory = matchToUpdate.assignedScorerHistory;
+    }
+
     // If match is still scheduled, sync remainingTime if quarterDuration or gameDuration is updated
     if (matchToUpdate.status === 'SCHEDULED') {
       const qDur = req.body['settings.quarterDuration'] || req.body.settings?.quarterDuration || req.body.gameDuration || req.body.quarterDuration;
       if (qDur && !isNaN(Number(qDur))) {
-        req.body.remainingTime = Number(qDur);
-        req.body.gameDuration = Number(qDur);
+        safeUpdate.remainingTime = Number(qDur);
+        safeUpdate.gameDuration = Number(qDur);
       }
       const sClock = req.body['settings.shotClock'] || req.body.settings?.shotClock || req.body.shotClock;
       if (sClock !== undefined && !isNaN(Number(sClock))) {
-        req.body.shotClockRemaining = Number(sClock);
-        req.body.shotClockDuration = Number(sClock);
+        safeUpdate.shotClockRemaining = Number(sClock);
+        safeUpdate.shotClockDuration = Number(sClock);
       }
       const struct = req.body['settings.matchStructure'] || req.body.settings?.matchStructure || req.body.matchStructure;
       if (struct === 'HALVES' && matchToUpdate.currentPeriod === 'Q1') {
-        req.body.currentPeriod = 'H1';
-        if (req.body.periodScores && req.body.periodScores[0]) {
-          req.body.periodScores[0].period = 'H1';
-        }
+        safeUpdate.currentPeriod = 'H1';
       } else if (struct === 'QUARTERS' && matchToUpdate.currentPeriod === 'H1') {
-        req.body.currentPeriod = 'Q1';
+        safeUpdate.currentPeriod = 'Q1';
       }
     }
 
-    const match = await Match.findByIdAndUpdate(req.params.id, req.body, {
+    const match = await Match.findByIdAndUpdate(req.params.id, { $set: safeUpdate }, {
       new: true,
       runValidators: true,
     })
-      .populate('teamA', 'name shortName logo primaryColor')
-      .populate('teamB', 'name shortName logo primaryColor');
+      .populate('teamA', 'name shortName logo primaryColor secondaryColor')
+      .populate('teamB', 'name shortName logo primaryColor secondaryColor')
+      .populate('tournamentId', 'name venue')
+      .populate('assignedScorer', 'name email role');
 
     res.status(200).json({ success: true, data: match });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Assign or reassign an official scorer to a match
+// @route   PUT /api/matches/:id/assign-scorer
+// @access  Private (Admin, Super Admin)
+const assignMatchScorer = async (req, res) => {
+  try {
+    const { scorerId } = req.body;
+    const match = await Match.findById(req.params.id);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    let targetScorer = null;
+    if (scorerId) {
+      targetScorer = await User.findById(scorerId);
+      if (!targetScorer) {
+        return res.status(404).json({ success: false, message: 'Scorer user not found' });
+      }
+      if (!['scorer', 'admin', 'superadmin'].includes(targetScorer.role)) {
+        return res.status(400).json({ success: false, message: 'Assigned user must have scorer or admin role' });
+      }
+    }
+
+    match.assignedScorer = scorerId || null;
+    match.assignedScorerHistory.push({
+      scorer: scorerId || null,
+      assignedBy: req.user._id,
+      assignedAt: new Date(),
+    });
+
+    await match.save();
+
+    try {
+      await ScoreAuditLog.create({
+        matchId: match._id,
+        tournamentId: match.tournamentId || null,
+        operatorId: req.user._id,
+        operatorName: req.user.name,
+        operatorEmail: req.user.email,
+        operatorRole: req.user.role,
+        actionType: 'SCORER_ASSIGNMENT',
+        previousScoreA: match.scoreA,
+        previousScoreB: match.scoreB,
+        newScoreA: match.scoreA,
+        newScoreB: match.scoreB,
+        notes: targetScorer
+          ? `Scorer ${targetScorer.name} (${targetScorer.email}) assigned by ${req.user.name}`
+          : `Scorer unassigned by ${req.user.name}`,
+        ipAddress: req.ip || req.connection?.remoteAddress || '',
+        userAgent: req.get('user-agent') || '',
+      });
+    } catch (aErr) {
+      console.error('[Audit Log Error]:', aErr.message);
+    }
+
+    const populatedMatch = await Match.findById(match._id)
+      .populate('teamA', 'name shortName logo primaryColor secondaryColor')
+      .populate('teamB', 'name shortName logo primaryColor secondaryColor')
+      .populate('tournamentId', 'name venue')
+      .populate('assignedScorer', 'name email role');
+
+    const io = req.app.get('io');
+    if (io) {
+      const { broadcastMatchState } = require('../sockets/matchSocket');
+      broadcastMatchState(io, match._id.toString(), populatedMatch);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: targetScorer ? `Scorer ${targetScorer.name} assigned successfully` : 'Scorer unassigned',
+      data: populatedMatch,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get complete tamper audit log history for a match
+// @route   GET /api/matches/:id/audit-logs
+// @access  Private (Admin, Super Admin)
+const getMatchAuditLogs = async (req, res) => {
+  try {
+    const logs = await ScoreAuditLog.find({ matchId: req.params.id })
+      .populate('operatorId', 'name email role')
+      .populate('restoredBy', 'name email role')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, count: logs.length, data: logs });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Restore match score from a tamper-evident audit record
+// @route   POST /api/matches/:id/restore-score
+// @access  Private (Admin, Super Admin)
+const restoreMatchScore = async (req, res) => {
+  try {
+    const { auditLogId, reason } = req.body;
+    if (!auditLogId) {
+      return res.status(400).json({ success: false, message: 'auditLogId is required' });
+    }
+
+    const logEntry = await ScoreAuditLog.findById(auditLogId);
+    if (!logEntry) {
+      return res.status(404).json({ success: false, message: 'Audit log record not found' });
+    }
+
+    if (logEntry.matchId.toString() !== req.params.id) {
+      return res.status(400).json({ success: false, message: 'Audit log entry does not belong to this match' });
+    }
+
+    const match = await Match.findById(req.params.id);
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+
+    const prevScoreA = match.scoreA;
+    const prevScoreB = match.scoreB;
+
+    const targetScoreA = logEntry.previousScoreA;
+    const targetScoreB = logEntry.previousScoreB;
+
+    match.scoreA = targetScoreA;
+    match.scoreB = targetScoreB;
+
+    // If match was completed and had persisted stats, update finalScore string
+    if (match.status === 'COMPLETED') {
+      match.finalScore = `${targetScoreA} - ${targetScoreB}`;
+      if (targetScoreA > targetScoreB) {
+        match.winner = 'A';
+        match.winnerTeamId = match.teamA;
+      } else if (targetScoreB > targetScoreA) {
+        match.winner = 'B';
+        match.winnerTeamId = match.teamB;
+      } else {
+        match.winner = 'DRAW';
+        match.winnerTeamId = null;
+      }
+    }
+
+    await match.save();
+
+    // Mark original audit log as restored
+    logEntry.isRestored = true;
+    logEntry.restoredAt = new Date();
+    logEntry.restoredBy = req.user._id;
+    await logEntry.save();
+
+    // Record new audit entry documenting restoration
+    const restorationLog = await ScoreAuditLog.create({
+      matchId: match._id,
+      tournamentId: match.tournamentId || null,
+      operatorId: req.user._id,
+      operatorName: req.user.name,
+      operatorEmail: req.user.email,
+      operatorRole: req.user.role,
+      actionType: 'SCORE_RESTORATION',
+      previousScoreA: prevScoreA,
+      previousScoreB: prevScoreB,
+      newScoreA: targetScoreA,
+      newScoreB: targetScoreB,
+      pointsDelta: (targetScoreA + targetScoreB) - (prevScoreA + prevScoreB),
+      notes: reason || `Score manually restored by ${req.user.name} from audit record ${auditLogId}`,
+      metadata: { restoredFromLogId: auditLogId },
+      ipAddress: req.ip || req.connection?.remoteAddress || '',
+      userAgent: req.get('user-agent') || '',
+    });
+
+    const populatedMatch = await Match.findById(match._id)
+      .populate('teamA', 'name shortName logo primaryColor secondaryColor')
+      .populate('teamB', 'name shortName logo primaryColor secondaryColor')
+      .populate('tournamentId', 'name venue')
+      .populate('assignedScorer', 'name email role');
+
+    const io = req.app.get('io');
+    if (io) {
+      const { broadcastMatchState } = require('../sockets/matchSocket');
+      broadcastMatchState(io, match._id.toString(), populatedMatch);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Match scores successfully restored to ${targetScoreA} - ${targetScoreB}`,
+      data: populatedMatch,
+      restorationLog,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -603,4 +862,7 @@ module.exports = {
   updateMatch,
   deleteMatch,
   getMatchSummary,
+  assignMatchScorer,
+  getMatchAuditLogs,
+  restoreMatchScore,
 };

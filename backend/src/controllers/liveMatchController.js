@@ -2,6 +2,7 @@ const Match = require('../models/Match');
 const MatchEvent = require('../models/MatchEvent');
 const Player = require('../models/Player');
 const Team = require('../models/Team');
+const ScoreAuditLog = require('../models/ScoreAuditLog');
 const { broadcastMatchState, broadcastBuzzerAlert } = require('../sockets/matchSocket');
 
 // Format seconds into MM:SS display
@@ -17,6 +18,7 @@ const getFullMatchData = async (matchId) => {
     .populate('teamA', 'name shortName logo primaryColor secondaryColor coach captain viceCaptain')
     .populate('teamB', 'name shortName logo primaryColor secondaryColor coach captain viceCaptain')
     .populate('tournamentId', 'name venue')
+    .populate('assignedScorer', 'name email role')
     .populate('playersA.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
     .populate('playersB.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
     .populate('teamA_roster.starters.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
@@ -505,6 +507,34 @@ const updateScore = async (req, res) => {
     }
 
     await match.save();
+
+    // Persist immutable ScoreAuditLog entry for tamper auditing & score history
+    try {
+      await ScoreAuditLog.create({
+        matchId: match._id,
+        tournamentId: match.tournamentId || null,
+        operatorId: req.user._id,
+        operatorName: req.user.name,
+        operatorEmail: req.user.email,
+        operatorRole: req.user.role,
+        actionType: 'SCORE_UPDATE',
+        previousScoreA: prevScoreA,
+        previousScoreB: prevScoreB,
+        newScoreA: match.scoreA,
+        newScoreB: match.scoreB,
+        pointsDelta: numPoints,
+        team,
+        playerId: scorerPlayer ? scorerPlayer._id : (playerId || null),
+        playerName: scorerName,
+        gameTime: formatTime(match.getCurrentRemainingTime()),
+        period: match.currentPeriod || '',
+        notes: `${req.user.name} (${req.user.role}) recorded ${numPoints > 0 ? `+${numPoints}` : numPoints} PTS for Team ${team}`,
+        ipAddress: req.ip || req.connection?.remoteAddress || '',
+        userAgent: req.get('user-agent') || '',
+      });
+    } catch (auditErr) {
+      console.error('[Security Audit Log Error]:', auditErr.message);
+    }
 
     // Broadcast and return fully populated state
     const responseData = await getFullMatchData(match._id);
@@ -1239,6 +1269,33 @@ const undoLastAction = async (req, res) => {
     // Delete the reverted event from history
     await lastEvent.deleteOne();
     await match.save();
+
+    if (lastEvent.type === 'SCORE') {
+      try {
+        await ScoreAuditLog.create({
+          matchId: match._id,
+          tournamentId: match.tournamentId || null,
+          operatorId: req.user._id,
+          operatorName: req.user.name,
+          operatorEmail: req.user.email,
+          operatorRole: req.user.role,
+          actionType: 'SCORE_UNDO',
+          previousScoreA: lastEvent.team === 'A' ? match.scoreA + lastEvent.points : match.scoreA,
+          previousScoreB: lastEvent.team === 'B' ? match.scoreB + lastEvent.points : match.scoreB,
+          newScoreA: match.scoreA,
+          newScoreB: match.scoreB,
+          pointsDelta: -lastEvent.points,
+          team: lastEvent.team,
+          playerId: lastEvent.playerId || null,
+          playerName: lastEvent.playerName || '',
+          notes: `${req.user.name} (${req.user.role}) undid score event: ${lastEvent.points} PTS for Team ${lastEvent.team}`,
+          ipAddress: req.ip || req.connection?.remoteAddress || '',
+          userAgent: req.get('user-agent') || '',
+        });
+      } catch (auditErr) {
+        console.error('[Security Audit Log Error on Undo]:', auditErr.message);
+      }
+    }
 
     const responseData = await broadcastState(req, match);
     res.status(200).json({

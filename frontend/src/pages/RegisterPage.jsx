@@ -8,7 +8,6 @@ const RegisterPage = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('scorer');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -29,7 +28,7 @@ const RegisterPage = () => {
 
     setLoading(true);
     try {
-      await register({ name, email, password, role });
+      await register({ name, email, password });
       setToast({ message: 'Account created! Redirecting to Dashboard...', type: 'success' });
       setTimeout(() => navigate('/dashboard'), 500);
     } catch (err) {
@@ -105,25 +104,11 @@ const RegisterPage = () => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                Desired Account Role
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {['scorer', 'viewer', 'admin'].map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setRole(r)}
-                    className={`py-2 px-3 rounded-xl border text-xs font-mono font-bold uppercase transition-all ${
-                      role === r
-                        ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 shadow-sm'
-                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 flex items-start gap-3 text-xs text-slate-400">
+              <Shield className="w-5 h-5 text-orange-400 mt-0.5 shrink-0" />
+              <div>
+                <span className="font-bold text-slate-200 block mb-0.5">Role Policy Notice</span>
+                All public registrations receive <span className="text-orange-400 font-bold">Viewer</span> access. Official Match Scorer and Tournament Administrator privileges are assigned by the Super Administrator.
               </div>
             </div>
 

@@ -37,16 +37,19 @@ import {
   Clock,
   UserPlus,
   Edit3,
+  Shield,
+  History,
 } from 'lucide-react';
 
 const LiveScoreboardPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isScorer } = useAuth();
+  const { user, isScorer, isAdmin, isSuperAdmin, canScoreMatch } = useAuth();
   const { socket, isConnected, joinMatch, leaveMatch } = useSocket();
   const { playShotClockBuzzer, playGameEndHorn, playWhistle, playClick, soundEnabled, toggleSound } = useSound();
 
   const [match, setMatch] = useState(null);
+  const isAuthorizedScorer = canScoreMatch(match);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -80,6 +83,37 @@ const LiveScoreboardPage = () => {
     position: 'G',
     replacePlayerId: '', // '' = Add to bench, or existing starter ID to replace immediately
   });
+
+  // Score Audit Trail Modal State & Handlers
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+
+  const fetchAuditLogs = async () => {
+    try {
+      setLoadingAuditLogs(true);
+      const res = await matchApi.getAuditLogs(id);
+      setAuditLogs(res?.data || []);
+    } catch (err) {
+      setToast({ message: 'Error loading audit logs: ' + err.message, type: 'error' });
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+  const handleRestoreScore = async (auditLogId) => {
+    if (!window.confirm('Are you sure you want to restore the match score to this recorded state?')) return;
+    try {
+      const res = await matchApi.restoreScore(id, auditLogId, 'Restored via Scoreboard Audit Console');
+      if (res?.data) {
+        setMatch(res.data);
+        setToast({ message: 'Score successfully restored!', type: 'success' });
+        setShowAuditModal(false);
+      }
+    } catch (err) {
+      setToast({ message: 'Restore failed: ' + err.message, type: 'error' });
+    }
+  };
 
   // Timeout Clock State (1 Min / 2 Min changable duration countdown)
   const [activeTimeout, setActiveTimeout] = useState(null); // { team: 'A'|'B', remaining: number, total: number, isRunning: boolean }
@@ -898,7 +932,7 @@ const LiveScoreboardPage = () => {
 
   // Scorer Keyboard Shortcuts Hook (Instant table control)
   useEffect(() => {
-    if (!isScorer || match?.status === 'COMPLETED') return;
+    if (!isAuthorizedScorer || match?.status === 'COMPLETED') return;
 
     const handleKeyDown = (e) => {
       // Don't trigger shortcuts if user is typing in an input, textarea or contenteditable element
@@ -1011,7 +1045,7 @@ const LiveScoreboardPage = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    isScorer,
+    isAuthorizedScorer,
     match?.status,
     match?.timerRunning,
     match?.matchType,
@@ -1152,6 +1186,12 @@ const LiveScoreboardPage = () => {
               <span className="text-xs text-white font-bold truncate max-w-[180px] sm:max-w-none">
                 {match.matchName}
               </span>
+
+              {/* Scorer Assignment Badge */}
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                <Shield className="w-3 h-3 text-orange-400" />
+                Scorer: {match.assignedScorer?.name || 'Unassigned (Admins Only)'}
+              </span>
             </div>
 
             <p className="text-[11px] text-slate-400 font-mono mt-0.5">
@@ -1169,7 +1209,7 @@ const LiveScoreboardPage = () => {
         {/* Console Action Links */}
         <div className="flex items-center gap-2">
           {/* Quick Substitution & Mid-Game Player Add Buttons for Scorer */}
-          {isScorer && !isCompleted && (
+          {isAuthorizedScorer && !isCompleted && (
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setSubModal({ isOpen: true, team: 'A' })}
@@ -1213,8 +1253,23 @@ const LiveScoreboardPage = () => {
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
+          {/* Score Tamper Audit Trail Button (Super Admin & Admin) */}
+          {(isAdmin || isSuperAdmin) && (
+            <button
+              onClick={() => {
+                fetchAuditLogs();
+                setShowAuditModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-indigo-200 text-xs font-mono font-bold border border-indigo-500/30 transition-all shadow-sm"
+              title="View immutable score tamper audit history & restore scores"
+            >
+              <Shield className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Audit Trail</span>
+            </button>
+          )}
+
           {/* Keyboard Hotkeys Cheat Sheet */}
-          {isScorer && !isCompleted && (
+          {isAuthorizedScorer && !isCompleted && (
             <button
               onClick={() => setShowHotkeysModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 text-xs font-mono font-bold border border-amber-500/30 transition-all shadow-sm"
@@ -1312,6 +1367,20 @@ const LiveScoreboardPage = () => {
           </div>
         )}
 
+        {/* Scorer Access Restriction Banner for Unauthorized Scorers */}
+        {user?.role === 'scorer' && !isAuthorizedScorer && !isCompleted && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-950/40 border border-amber-600/40 flex items-center justify-between gap-3 text-amber-200 text-xs font-mono shadow-lg">
+            <div className="flex items-center gap-3">
+              <Shield className="w-5 h-5 text-amber-400 shrink-0" />
+              <div>
+                <span className="font-bold text-amber-300 block mb-0.5">Scorer Access Restricted</span>
+                You are authenticated as an official scorer, but this match is assigned to{' '}
+                <strong className="text-white">{match.assignedScorer?.name || 'an administrator'}</strong>. Scoring controls and clocks are disabled to prevent unauthorized score manipulation.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 3-Column Arena Scoreboard Grid: Team A | Center Timer & Shot Clock | Team B */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
           {/* Team A Score Card */}
@@ -1325,7 +1394,7 @@ const LiveScoreboardPage = () => {
               foulLimit={match.foulLimit || (is5x5 ? 5 : 7)}
               matchType={match.matchType || '3x3'}
               isPossession={match.possession === 'A'}
-              isScorer={isScorer && !isCompleted}
+              isScorer={isAuthorizedScorer && !isCompleted}
               onScoreClick={handleOpenScorerModal}
               onAddFoul={handleFoulAction}
               onSubFoul={handleFoulAction}
@@ -1374,7 +1443,7 @@ const LiveScoreboardPage = () => {
                 </div>
 
                 {/* Controls */}
-                {isScorer && !isCompleted && (
+                {isAuthorizedScorer && !isCompleted && (
                   <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
                     <button
                       onClick={handleTogglePauseTimeout}
@@ -1411,7 +1480,7 @@ const LiveScoreboardPage = () => {
               teamAName={match.teamA?.shortName || 'TMA'}
               teamBName={match.teamB?.shortName || 'TMB'}
               onToggle={handleTogglePossession}
-              isScorer={isScorer && !isCompleted}
+              isScorer={isAuthorizedScorer && !isCompleted}
             />
 
             {/* Game Clock Display */}
@@ -1455,7 +1524,7 @@ const LiveScoreboardPage = () => {
                 onExpire={() => {
                   playShotClockBuzzer();
                 }}
-                isScorer={isScorer && !isCompleted}
+                isScorer={isAuthorizedScorer && !isCompleted}
               />
             </div>
           </div>
@@ -1471,7 +1540,7 @@ const LiveScoreboardPage = () => {
               foulLimit={match.foulLimit || (is5x5 ? 5 : 7)}
               matchType={match.matchType || '3x3'}
               isPossession={match.possession === 'B'}
-              isScorer={isScorer && !isCompleted}
+              isScorer={isAuthorizedScorer && !isCompleted}
               onScoreClick={handleOpenScorerModal}
               onAddFoul={handleFoulAction}
               onSubFoul={handleFoulAction}
@@ -1487,7 +1556,7 @@ const LiveScoreboardPage = () => {
         </div>
 
         {/* Scorer Action Control Panel (START, PAUSE, RESET, QUARTER CONTROLS, UNDO, END MATCH) */}
-        {isScorer && !isCompleted && (
+        {isAuthorizedScorer && !isCompleted && (
           <div className="mt-8 pt-6 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-2xl">
             {/* Clock & Quarter Controls */}
             <div className="flex flex-wrap items-center gap-2">
@@ -1568,7 +1637,7 @@ const LiveScoreboardPage = () => {
       {/* Live Player Box Score Tracker */}
       <LivePlayerStats
         match={match}
-        isScorer={isScorer && !isCompleted}
+        isScorer={isAuthorizedScorer && !isCompleted}
         onRecordStat={handleRecordPlayerStat}
         onPlayerScore={(team, pts, pId) => executeScoreUpdate(team, pts, pId)}
       />
@@ -2105,6 +2174,126 @@ const LiveScoreboardPage = () => {
                 className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors"
               >
                 Close (Esc)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Score Tamper Audit Trail Modal (Super Admin & Admin) */}
+      {showAuditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base flex items-center gap-2">
+                    Score Audit Trail & Restoration Console
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    Immutable history of all scoring events, operators, and timestamps
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAuditModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-3 flex-1">
+              {loadingAuditLogs ? (
+                <div className="flex items-center justify-center py-12 text-slate-400 font-mono text-sm">
+                  Loading audit logs...
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 font-mono text-sm">
+                  No score modifications recorded for this match yet.
+                </div>
+              ) : (
+                auditLogs.map((log) => (
+                  <div
+                    key={log._id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      log.actionType === 'SCORE_RESTORATION'
+                        ? 'bg-purple-950/20 border-purple-800/40'
+                        : log.actionType === 'SCORE_UNDO'
+                        ? 'bg-rose-950/20 border-rose-800/40'
+                        : log.actionType === 'SCORER_ASSIGNMENT'
+                        ? 'bg-cyan-950/20 border-cyan-800/40'
+                        : 'bg-slate-950/40 border-slate-800/80'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
+                            log.actionType === 'SCORE_RESTORATION'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              : log.actionType === 'SCORE_UNDO'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                              : log.actionType === 'SCORER_ASSIGNMENT'
+                              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          }`}
+                        >
+                          {log.actionType.replace('_', ' ')}
+                        </span>
+                        <span className="text-xs font-mono text-slate-400">
+                          {new Date(log.createdAt).toLocaleTimeString()} • {new Date(log.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      {/* Restore Button (available for score modifications) */}
+                      {log.actionType !== 'SCORER_ASSIGNMENT' && (
+                        <button
+                          onClick={() => handleRestoreScore(log._id)}
+                          className="px-2.5 py-1 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 text-xs font-mono font-bold border border-orange-500/40 flex items-center gap-1 transition-all"
+                          title="Restore score to this recorded state"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Restore To ({log.previousScoreA} - {log.previousScoreB})</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono text-slate-300 bg-black/30 p-2.5 rounded-xl border border-slate-800/50">
+                      <div>
+                        <span className="text-slate-500 block text-[10px] uppercase">Score Transition</span>
+                        <span className="font-bold text-white">
+                          {log.previousScoreA} - {log.previousScoreB} ➔{' '}
+                          <span className="text-orange-400 font-bold">{log.newScoreA} - {log.newScoreB}</span>
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[10px] uppercase">Recorded Operator</span>
+                        <span className="text-slate-200">
+                          {log.operatorName} ({log.operatorRole})
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[10px] uppercase">Details</span>
+                        <span className="text-slate-300 truncate block">
+                          {log.notes || (log.playerName ? `${log.playerName} +${log.pointsDelta}` : 'Score modified')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex justify-end">
+              <button
+                onClick={() => setShowAuditModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold transition-colors"
+              >
+                Close Audit Console
               </button>
             </div>
           </div>

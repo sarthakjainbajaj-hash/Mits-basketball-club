@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { matchApi } from '../api/matchApi';
+import { authApi } from '../api/authApi';
 import {
   Shield,
   Clock,
@@ -40,6 +41,9 @@ const MatchSetupPage = () => {
   const [toast, setToast] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Scorer Assignment State
+  const [availableScorers, setAvailableScorers] = useState([]);
+
   // Edit Schedule Modal State
   const [isEditScheduleModalOpen, setIsEditScheduleModalOpen] = useState(false);
   const [isUpdatingSchedule, setIsUpdatingSchedule] = useState(false);
@@ -69,7 +73,34 @@ const MatchSetupPage = () => {
 
   useEffect(() => {
     fetchMatch();
-  }, [id]);
+    if (isAdmin) {
+      fetchScorers();
+    }
+  }, [id, isAdmin]);
+
+  const fetchScorers = async () => {
+    try {
+      const res = await authApi.getAllUsers();
+      if (res?.data) {
+        const scorers = res.data.filter((u) => ['scorer', 'admin', 'superadmin'].includes(u.role));
+        setAvailableScorers(scorers);
+      }
+    } catch (err) {
+      console.warn('Could not load scorers list:', err.message);
+    }
+  };
+
+  const handleAssignScorer = async (scorerId) => {
+    try {
+      const res = await matchApi.assignScorer(id, scorerId || null);
+      if (res?.data) {
+        setMatch(res.data);
+        setToast({ message: res.message || 'Scorer assignment updated!', type: 'success' });
+      }
+    } catch (err) {
+      setToast({ message: 'Failed to assign scorer: ' + err.message, type: 'error' });
+    }
+  };
 
   const fetchMatch = async () => {
     try {
@@ -643,6 +674,49 @@ const MatchSetupPage = () => {
             {timeoutDuration === 120 && <CheckCircle2 className="w-5 h-5 text-orange-400" />}
           </button>
         </div>
+      </div>
+
+      {/* Official Match Scorer Assignment Card (Admins and Super Admins) */}
+      <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-orange-400" />
+            <h2 className="font-bold text-white text-base">Official Match Scorer Assignment</h2>
+          </div>
+          <span className="text-xs font-mono font-bold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/30">
+            {match?.assignedScorer ? `Assigned: ${match.assignedScorer.name || 'Scorer'}` : 'Unassigned (Admins Only)'}
+          </span>
+        </div>
+        <p className="text-xs text-slate-400">
+          Only the specifically assigned scorer (or tournament administrators) will be authorized to update live scores, shot clocks, and foul counters for this game.
+        </p>
+
+        {isAdmin ? (
+          <div className="pt-1">
+            <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">
+              Select Authorized Scorer
+            </label>
+            <select
+              value={match?.assignedScorer?._id || match?.assignedScorer || ''}
+              onChange={(e) => handleAssignScorer(e.target.value)}
+              className="w-full px-4 py-3 rounded-2xl bg-slate-950/90 border border-slate-700 text-white font-mono text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all"
+            >
+              <option value="">-- No Specific Scorer (Administrator Only Access) --</option>
+              {availableScorers.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.name} ({s.email}) — [{s.role.toUpperCase()}]
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs font-mono text-slate-300">
+            Current Scorer:{' '}
+            <strong className="text-orange-400">
+              {match?.assignedScorer?.name ? `${match.assignedScorer.name} (${match.assignedScorer.email})` : 'None (Admin only)'}
+            </strong>
+          </div>
+        )}
       </div>
 
       {/* Roster Breakdown (Starters & Substitutes) with Direct Add/Replace Player */}

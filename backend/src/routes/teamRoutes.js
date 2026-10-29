@@ -16,7 +16,7 @@ router.route('/')
 
 router.route('/:id')
   .get(getTeamById)
-  .put(protect, authorize('admin', 'scorer'), updateTeam)
-  .delete(protect, authorize('admin', 'scorer'), deleteTeam);
+  .put(protect, authorize('admin'), updateTeam)
+  .delete(protect, authorize('admin'), deleteTeam);
 
 module.exports = router;

@@ -14,19 +14,21 @@ const {
 const { protect } = require('../middleware/auth');
 const { authorize } = require('../middleware/role');
 
+// Public read, Admin/SuperAdmin create
 router.route('/')
   .get(getTournaments)
-  .post(protect, authorize('admin', 'scorer'), createTournament);
+  .post(protect, authorize('admin'), createTournament);
 
 router.get('/:id/standings', getTournamentStandings);
 
+// Admin/SuperAdmin edit and delete
 router.route('/:id')
   .get(getTournamentById)
-  .put(protect, authorize('admin', 'scorer'), updateTournament)
-  .delete(protect, authorize('admin', 'scorer'), deleteTournament);
+  .put(protect, authorize('admin'), updateTournament)
+  .delete(protect, authorize('admin'), deleteTournament);
 
-router.post('/:id/teams', protect, authorize('admin', 'scorer'), addTeamToTournament);
-router.delete('/:id/teams/:teamId', protect, authorize('admin', 'scorer'), removeTeamFromTournament);
-router.post('/:id/generate-fixtures', protect, authorize('admin', 'scorer'), generateFixtures);
+router.post('/:id/teams', protect, authorize('admin'), addTeamToTournament);
+router.delete('/:id/teams/:teamId', protect, authorize('admin'), removeTeamFromTournament);
+router.post('/:id/generate-fixtures', protect, authorize('admin'), generateFixtures);
 
 module.exports = router;

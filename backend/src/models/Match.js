@@ -230,6 +230,20 @@ const matchSchema = new mongoose.Schema(
       default: false,
     },
     playerStats: [matchPlayerStatSchema],
+
+    // Authorized Scorer Assignment (Security: Strict Access Scoping)
+    assignedScorer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    assignedScorerHistory: [
+      {
+        scorer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        assignedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,
@@ -259,5 +273,6 @@ matchSchema.index({ status: 1, createdAt: -1 });
 matchSchema.index({ tournamentId: 1, createdAt: -1 });
 matchSchema.index({ matchType: 1, status: 1 });
 matchSchema.index({ teamA: 1, teamB: 1 });
+matchSchema.index({ assignedScorer: 1 });
 
 module.exports = mongoose.model('Match', matchSchema);
