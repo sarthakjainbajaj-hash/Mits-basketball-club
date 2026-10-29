@@ -185,14 +185,24 @@ const MatchDetailsPage = () => {
             </span>
             <div className="w-8 h-0.5 bg-slate-700 mx-auto" />
             {isCompleted && (
-              <span className="text-xs font-mono text-emerald-400 font-bold mt-2 block">
-                WINNER:{' '}
-                {match.winner === 'A'
-                  ? match.teamA?.name || match.teamA?.shortName
-                  : match.winner === 'B'
-                  ? match.teamB?.name || match.teamB?.shortName
-                  : 'DRAW'}
-              </span>
+              <div className="mt-2 space-y-0.5">
+                <span className="text-xs font-mono text-emerald-400 font-bold flex items-center justify-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {match.scoreA > match.scoreB
+                      ? `${match.teamA?.name || 'Team A'} wins`
+                      : match.scoreB > match.scoreA
+                      ? `${match.teamB?.name || 'Team B'} wins`
+                      : 'Match Drawn'}
+                  </span>
+                </span>
+                {match.scoreA !== match.scoreB && (
+                  <span className="text-[11px] font-mono text-amber-400 font-bold block">
+                    by {Math.abs(match.scoreA - match.scoreB)}{' '}
+                    {Math.abs(match.scoreA - match.scoreB) === 1 ? 'point' : 'points'}
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

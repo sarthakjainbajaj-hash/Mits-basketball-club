@@ -406,40 +406,65 @@ const TeamDetailsPage = () => {
 
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
             {team.recentMatches && team.recentMatches.length > 0 ? (
-              team.recentMatches.map((m) => (
-                <Link
-                  key={m._id}
-                  to={`/matches/${m._id}`}
-                  className="block p-3.5 rounded-2xl bg-slate-950/60 hover:bg-slate-800/60 border border-slate-800 transition-all group"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-400 font-mono mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                          m.matchType === '5x5'
-                            ? 'bg-blue-950 text-blue-400 border border-blue-800'
-                            : 'bg-orange-950 text-orange-400 border border-orange-800'
-                        }`}
-                      >
-                        {m.matchType || '3x3'}
-                      </span>
-                      <span>{m.matchName}</span>
+              team.recentMatches.map((m) => {
+                const scoreA = Number(m.scoreA ?? 0);
+                const scoreB = Number(m.scoreB ?? 0);
+                const isCompleted = m.status === 'COMPLETED' || (!['LIVE', 'PAUSED', 'SCHEDULED'].includes(m.status) && (scoreA > 0 || scoreB > 0));
+                const diff = Math.abs(scoreA - scoreB);
+                const winnerName = scoreA > scoreB ? (m.teamA?.name || 'Team A') : scoreB > scoreA ? (m.teamB?.name || 'Team B') : null;
+
+                return (
+                  <Link
+                    key={m._id}
+                    to={`/matches/${m._id}`}
+                    className="block p-3.5 rounded-2xl bg-slate-950/60 hover:bg-slate-800/60 border border-slate-800 hover:border-slate-700 transition-all group"
+                  >
+                    <div className="flex items-center justify-between text-xs text-slate-400 font-mono mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            m.matchType === '5x5'
+                              ? 'bg-blue-950 text-blue-400 border border-blue-800'
+                              : 'bg-orange-950 text-orange-400 border border-orange-800'
+                          }`}
+                        >
+                          {m.matchType || '3x3'}
+                        </span>
+                        <span className="font-semibold text-slate-300">{m.matchName}</span>
+                      </div>
+                      <span>{new Date(m.scheduledDate || m.createdAt).toLocaleDateString()}</span>
                     </div>
-                    <span>{new Date(m.scheduledDate || m.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white group-hover:text-orange-400 transition-colors">
-                      {m.teamA?.name}
-                    </span>
-                    <span className="font-digital font-bold text-amber-400 px-3 py-0.5 rounded bg-slate-900 border border-slate-700 tracking-[0.16em]">
-                      {m.scoreA} - {m.scoreB}
-                    </span>
-                    <span className="font-bold text-white group-hover:text-cyan-400 transition-colors">
-                      {m.teamB?.name}
-                    </span>
-                  </div>
-                </Link>
-              ))
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-white group-hover:text-orange-400 transition-colors truncate max-w-[38%]">
+                        {m.teamA?.name}
+                      </span>
+                      <span className="font-digital font-bold text-amber-400 px-3 py-0.5 rounded bg-slate-900 border border-slate-700 tracking-[0.16em] flex-shrink-0">
+                        {scoreA} - {scoreB}
+                      </span>
+                      <span className="font-bold text-white group-hover:text-cyan-400 transition-colors truncate max-w-[38%] text-right">
+                        {m.teamB?.name}
+                      </span>
+                    </div>
+
+                    {isCompleted && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
+                        <span className="text-emerald-400 font-bold flex items-center gap-1.5 truncate">
+                          <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                          <span className="truncate">
+                            {scoreA === scoreB
+                              ? `Match Tied (${scoreA} - ${scoreB})`
+                              : `${winnerName} wins by ${diff} ${diff === 1 ? 'point' : 'points'}`}
+                          </span>
+                        </span>
+                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 flex-shrink-0 ml-2">
+                          Final
+                        </span>
+                      </div>
+                    )}
+                  </Link>
+                );
+              })
             ) : (
               <p className="text-sm text-slate-500 text-center py-6">No recent matches recorded</p>
             )}

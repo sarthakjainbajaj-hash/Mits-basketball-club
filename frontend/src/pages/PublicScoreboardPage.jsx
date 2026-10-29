@@ -251,6 +251,12 @@ const PublicScoreboardPage = () => {
                   ? match.teamB?.name
                   : 'DRAW'}
               </span>
+              {match.scoreA !== match.scoreB && (
+                <span className="text-emerald-300 font-bold ml-2">
+                  (Won by {Math.abs(match.scoreA - match.scoreB)}{' '}
+                  {Math.abs(match.scoreA - match.scoreB) === 1 ? 'point' : 'points'})
+                </span>
+              )}
             </p>
           </div>
         )}

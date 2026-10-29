@@ -828,6 +828,25 @@ const TournamentDetailsPage = () => {
                           />
                         </div>
                       </div>
+
+                      {/* Winner Display on Completed Match */}
+                      {isCompleted && (
+                        <div className="mt-2.5 p-2.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between text-xs font-mono">
+                          <span className="text-emerald-400 font-bold flex items-center gap-1.5 truncate">
+                            <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            <span className="truncate">
+                              {Number(m.scoreA ?? 0) > Number(m.scoreB ?? 0)
+                                ? `${m.teamA?.name || 'Team A'} wins by ${Number(m.scoreA) - Number(m.scoreB)} ${Number(m.scoreA) - Number(m.scoreB) === 1 ? 'point' : 'points'}`
+                                : Number(m.scoreB ?? 0) > Number(m.scoreA ?? 0)
+                                ? `${m.teamB?.name || 'Team B'} wins by ${Number(m.scoreB) - Number(m.scoreA)} ${Number(m.scoreB) - Number(m.scoreA) === 1 ? 'point' : 'points'}`
+                                : `Match Tied (${m.scoreA ?? 0} - ${m.scoreB ?? 0})`}
+                            </span>
+                          </span>
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 flex-shrink-0 ml-2">
+                            Final
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions Row */}

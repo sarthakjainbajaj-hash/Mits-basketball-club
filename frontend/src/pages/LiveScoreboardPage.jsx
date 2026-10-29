@@ -1286,6 +1286,12 @@ const LiveScoreboardPage = () => {
                   ? match.teamB?.name
                   : 'Draw'}
               </span>{' '}
+              {match.scoreA !== match.scoreB && (
+                <span className="text-amber-400 font-bold">
+                  (Won by {Math.abs(match.scoreA - match.scoreB)}{' '}
+                  {Math.abs(match.scoreA - match.scoreB) === 1 ? 'point' : 'points'})
+                </span>
+              )}{' '}
               • Statistics saved to official database
             </p>
           </div>
