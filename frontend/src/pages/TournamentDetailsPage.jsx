@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Edit3,
   Zap,
+  Flame,
 } from 'lucide-react';
 import Toast from '../components/Common/Toast';
 
@@ -37,6 +38,10 @@ const TournamentDetailsPage = () => {
   const [activeTab, setActiveTab] = useState('standings'); // 'standings' | 'matches' | 'teams'
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+
+  // Standings Sorting State (Default: 'score' / Points For - highest score at top, lowest below)
+  const [standingsSortMode, setStandingsSortMode] = useState('score'); // 'score' | 'pts' | 'diff' | 'won' | 'played'
+  const [standingsSortOrder, setStandingsSortOrder] = useState('desc'); // 'desc' | 'asc'
 
   // Fixtures Sub-filter
   const [fixtureFilter, setFixtureFilter] = useState('all'); // 'all' | 'scheduled' | 'live' | 'completed'
@@ -467,6 +472,92 @@ const TournamentDetailsPage = () => {
     t.shortName?.toLowerCase().includes(teamSearch.toLowerCase())
   );
 
+  // Map of teamId -> tournament stats (pointsFor, pts, won, lost, etc.)
+  const teamScoresMap = {};
+  standings.forEach((st) => {
+    if (st.teamId) teamScoresMap[st.teamId.toString()] = st;
+  });
+
+  // Standings sorting logic (Score-Wise by default)
+  const sortedStandings = [...standings].sort((a, b) => {
+    const mult = standingsSortOrder === 'asc' ? 1 : -1;
+    if (standingsSortMode === 'score' || standingsSortMode === 'pointsFor') {
+      if (Number(a.pointsFor) !== Number(b.pointsFor)) {
+        return (Number(a.pointsFor) - Number(b.pointsFor)) * mult;
+      }
+      if (Number(a.pts) !== Number(b.pts)) {
+        return (Number(a.pts) - Number(b.pts)) * mult;
+      }
+      return (Number(a.difference) - Number(b.difference)) * mult;
+    }
+    if (standingsSortMode === 'pts') {
+      if (Number(a.pts) !== Number(b.pts)) {
+        return (Number(a.pts) - Number(b.pts)) * mult;
+      }
+      if (Number(a.pointsFor) !== Number(b.pointsFor)) {
+        return (Number(a.pointsFor) - Number(b.pointsFor)) * mult;
+      }
+      return (Number(a.difference) - Number(b.difference)) * mult;
+    }
+    if (standingsSortMode === 'won') {
+      if (Number(a.won) !== Number(b.won)) {
+        return (Number(a.won) - Number(b.won)) * mult;
+      }
+      if (Number(a.pointsFor) !== Number(b.pointsFor)) {
+        return (Number(a.pointsFor) - Number(b.pointsFor)) * mult;
+      }
+      return (Number(a.difference) - Number(b.difference)) * mult;
+    }
+    if (standingsSortMode === 'diff' || standingsSortMode === 'difference') {
+      if (Number(a.difference) !== Number(b.difference)) {
+        return (Number(a.difference) - Number(b.difference)) * mult;
+      }
+      if (Number(a.pointsFor) !== Number(b.pointsFor)) {
+        return (Number(a.pointsFor) - Number(b.pointsFor)) * mult;
+      }
+      return (Number(a.pts) - Number(b.pts)) * mult;
+    }
+    if (standingsSortMode === 'played') {
+      if (Number(a.played) !== Number(b.played)) {
+        return (Number(a.played) - Number(b.played)) * mult;
+      }
+      return (Number(a.pointsFor) - Number(b.pointsFor)) * mult;
+    }
+    if (standingsSortMode === 'pointsAgainst' || standingsSortMode === 'PA') {
+      if (Number(a.pointsAgainst) !== Number(b.pointsAgainst)) {
+        return (Number(a.pointsAgainst) - Number(b.pointsAgainst)) * mult;
+      }
+      return (Number(a.pointsFor) - Number(b.pointsFor)) * mult;
+    }
+    // Default score-wise
+    if (Number(a.pointsFor) !== Number(b.pointsFor)) {
+      return (Number(a.pointsFor) - Number(b.pointsFor)) * mult;
+    }
+    return (Number(a.pts) - Number(b.pts)) * mult;
+  });
+
+  const handleSortColumn = (colKey) => {
+    if (standingsSortMode === colKey) {
+      setStandingsSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setStandingsSortMode(colKey);
+      setStandingsSortOrder('desc');
+    }
+  };
+
+  // Sort tournament teams score-wise (highest score at top)
+  const sortedTournamentTeams = [...tournamentTeams].sort((a, b) => {
+    const idA = getTeamId(a)?.toString();
+    const idB = getTeamId(b)?.toString();
+    const scoreA = Number(teamScoresMap[idA]?.pointsFor) || 0;
+    const scoreB = Number(teamScoresMap[idB]?.pointsFor) || 0;
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    const ptsA = Number(teamScoresMap[idA]?.pts) || 0;
+    const ptsB = Number(teamScoresMap[idB]?.pts) || 0;
+    if (ptsB !== ptsA) return ptsB - ptsA;
+    return getTeamName(a).localeCompare(getTeamName(b));
+  });
+
   return (
     <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 overflow-x-hidden">
       {/* Back Link & Admin Actions */}
@@ -607,38 +698,131 @@ const TournamentDetailsPage = () => {
       {/* Tab: Standings Table */}
       {activeTab === 'standings' && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-4 p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
-            <div className="flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-400" />
-              <h2 className="font-bold text-white text-base">
-                {tournament.format === '3x3' ? 'FIBA 3x3 Standings' : 'Tournament Points Table & Standings'}
-              </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div>
+              <div className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-amber-400" />
+                <h2 className="font-bold text-white text-base">
+                  {tournament.format === '3x3' ? 'FIBA 3x3 Standings' : 'Tournament Points Table & Standings'}
+                </h2>
+              </div>
+              <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-mono">
+                <span>Ranked by:</span>
+                <span className="font-bold text-amber-400">
+                  {standingsSortMode === 'score'
+                    ? '⚡ Highest Score (Points Scored / PF) > Wins > Point Diff'
+                    : standingsSortMode === 'pts'
+                    ? '🏆 Tournament Points (Wins / PTS) > Points Scored > Diff'
+                    : `${standingsSortMode.toUpperCase()} (${standingsSortOrder === 'desc' ? 'High to Low' : 'Low to High'})`}
+                </span>
+              </p>
             </div>
-            <span className="text-xs font-mono text-slate-400">
-              Ranked by: PTS (Wins) &gt; Win% &gt; Diff &gt; Points For
-            </span>
+
+            {/* Quick Rank Switcher Buttons */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-2xl border border-slate-800 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setStandingsSortMode('score');
+                  setStandingsSortOrder('desc');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all ${
+                  standingsSortMode === 'score'
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Sort score-wise: Teams with most points scored on top"
+              >
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                <span>Score-Wise (PF)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStandingsSortMode('pts');
+                  setStandingsSortOrder('desc');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all ${
+                  standingsSortMode === 'pts'
+                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Sort by tournament match points (Wins & PTS)"
+              >
+                <Trophy className="w-3.5 h-3.5 text-orange-400" />
+                <span>Points Table (PTS)</span>
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto w-full max-w-full pb-2">
             <table className="w-full min-w-[680px] text-left border-collapse text-sm">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-mono text-xs uppercase tracking-wider">
+                <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-mono text-xs uppercase tracking-wider select-none">
                   <th className="py-3 px-3 text-center">Rank</th>
                   <th className="py-3 px-4">Team</th>
-                  <th className="py-3 px-3 text-center">Played</th>
-                  <th className="py-3 px-3 text-center text-emerald-400 font-bold">Won</th>
+                  <th
+                    onClick={() => handleSortColumn('played')}
+                    className="py-3 px-3 text-center cursor-pointer hover:text-white transition-colors"
+                    title="Click to sort by matches played"
+                  >
+                    Played {standingsSortMode === 'played' && (standingsSortOrder === 'desc' ? '↓' : '↑')}
+                  </th>
+                  <th
+                    onClick={() => handleSortColumn('won')}
+                    className="py-3 px-3 text-center text-emerald-400 font-bold cursor-pointer hover:text-emerald-300 transition-colors"
+                    title="Click to sort by wins"
+                  >
+                    Won {standingsSortMode === 'won' && (standingsSortOrder === 'desc' ? '↓' : '↑')}
+                  </th>
                   <th className="py-3 px-3 text-center text-red-400">Lost</th>
                   <th className="py-3 px-3 text-center text-slate-400">Draw</th>
-                  <th className="py-3 px-3 text-center text-amber-400 font-bold">PF</th>
-                  <th className="py-3 px-3 text-center">PA</th>
-                  <th className="py-3 px-3 text-center font-bold">Diff</th>
+                  <th
+                    onClick={() => handleSortColumn('score')}
+                    className={`py-3 px-3 text-center cursor-pointer transition-colors ${
+                      standingsSortMode === 'score'
+                        ? 'bg-amber-500/20 text-amber-300 border-x border-amber-500/30 font-black'
+                        : 'text-amber-400 font-bold hover:text-amber-300'
+                    }`}
+                    title="Click to sort score-wise (Highest Score Scored)"
+                  >
+                    <div className="inline-flex items-center gap-1 justify-center">
+                      <Flame className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Score (PF)</span>
+                      {standingsSortMode === 'score' && (standingsSortOrder === 'desc' ? '↓' : '↑')}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSortColumn('pointsAgainst')}
+                    className="py-3 px-3 text-center cursor-pointer hover:text-white transition-colors"
+                    title="Click to sort by points against"
+                  >
+                    PA {standingsSortMode === 'pointsAgainst' && (standingsSortOrder === 'desc' ? '↓' : '↑')}
+                  </th>
+                  <th
+                    onClick={() => handleSortColumn('diff')}
+                    className="py-3 px-3 text-center font-bold cursor-pointer hover:text-white transition-colors"
+                    title="Click to sort by score difference"
+                  >
+                    Diff {standingsSortMode === 'diff' && (standingsSortOrder === 'desc' ? '↓' : '↑')}
+                  </th>
                   <th className="py-3 px-3 text-center text-cyan-400 font-bold">Win%</th>
-                  <th className="py-3 px-3 text-center text-orange-400 font-bold">PTS</th>
+                  <th
+                    onClick={() => handleSortColumn('pts')}
+                    className={`py-3 px-3 text-center cursor-pointer transition-colors ${
+                      standingsSortMode === 'pts'
+                        ? 'bg-orange-500/20 text-orange-300 border-x border-orange-500/30 font-black'
+                        : 'text-orange-400 font-bold hover:text-orange-300'
+                    }`}
+                    title="Click to sort by league points"
+                  >
+                    PTS {standingsSortMode === 'pts' && (standingsSortOrder === 'desc' ? '↓' : '↑')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono text-xs sm:text-sm">
-                {standings.length > 0 ? (
-                  standings.map((st, idx) => (
+                {sortedStandings.length > 0 ? (
+                  sortedStandings.map((st, idx) => (
                     <tr key={st.teamId} className="hover:bg-slate-800/40 transition-colors">
                       <td className="py-3.5 px-3 text-center font-bold text-slate-400">
                         {idx === 0 ? '🥇 1' : idx === 1 ? '🥈 2' : idx === 2 ? '🥉 3' : idx + 1}
@@ -662,7 +846,11 @@ const TournamentDetailsPage = () => {
                       </td>
                       <td className="py-3.5 px-3 text-center text-red-400">{st.lost}</td>
                       <td className="py-3.5 px-3 text-center text-slate-400">{st.draw || 0}</td>
-                      <td className="py-3.5 px-3 text-center font-digital font-bold text-amber-400 text-base">
+                      <td className={`py-3.5 px-3 text-center font-digital font-bold text-base ${
+                        standingsSortMode === 'score'
+                          ? 'bg-amber-500/15 text-amber-300 font-black text-lg border-x border-amber-500/20'
+                          : 'text-amber-400'
+                      }`}>
                         {st.pointsFor}
                       </td>
                       <td className="py-3.5 px-3 text-center text-slate-300">{st.pointsAgainst}</td>
@@ -676,7 +864,11 @@ const TournamentDetailsPage = () => {
                       <td className="py-3.5 px-3 text-center font-digital text-cyan-400 font-bold">
                         {st.winPct || '.000'}
                       </td>
-                      <td className="py-3.5 px-3 text-center font-digital font-bold text-orange-400 text-base bg-orange-500/10">
+                      <td className={`py-3.5 px-3 text-center font-digital font-bold text-base ${
+                        standingsSortMode === 'pts'
+                          ? 'bg-orange-500/20 text-orange-300 font-black text-lg border-x border-orange-500/20'
+                          : 'text-orange-400 bg-orange-500/10'
+                      }`}>
                         {st.pts || 0}
                       </td>
                     </tr>
@@ -952,8 +1144,10 @@ const TournamentDetailsPage = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
             <div>
               <h3 className="font-bold text-white text-base">Participating Teams</h3>
-              <p className="text-xs text-slate-400">
-                Teams registered in this tournament roster ({tournamentTeams.length})
+              <p className="text-xs text-slate-400 flex items-center gap-1.5 font-mono">
+                <span>Ranked score-wise ({tournamentTeams.length} teams)</span>
+                <span>•</span>
+                <span className="text-amber-400 font-bold">Highest points scored at top</span>
               </p>
             </div>
 
@@ -969,13 +1163,17 @@ const TournamentDetailsPage = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {tournamentTeams.length > 0 ? (
-              tournamentTeams.map((tm) => {
+            {sortedTournamentTeams.length > 0 ? (
+              sortedTournamentTeams.map((tm, idx) => {
                 const tmId = getTeamId(tm);
                 const tmName = getTeamName(tm);
                 const tmColor = tm?.primaryColor || '#FF5722';
                 const tmShort = tm?.shortName || tmName.slice(0, 3);
                 const tmCoach = tm?.coach || 'Head Coach';
+                const st = teamScoresMap[tmId];
+                const pointsFor = st?.pointsFor ?? 0;
+                const won = st?.won ?? 0;
+                const lost = st?.lost ?? 0;
 
                 return (
                   <div
@@ -987,7 +1185,12 @@ const TournamentDetailsPage = () => {
                       style={{ backgroundColor: tmColor }}
                     />
 
-                    <Link to={`/teams/${tmId}`} className="flex flex-col items-center text-center">
+                    {/* Rank Badge */}
+                    <div className="absolute top-2.5 right-3 font-mono text-xs font-black px-2 py-0.5 rounded-md bg-slate-950/80 border border-slate-800 text-amber-400">
+                      {idx === 0 ? '🥇 #1' : idx === 1 ? '🥈 #2' : idx === 2 ? '🥉 #3' : `#${idx + 1}`}
+                    </div>
+
+                    <Link to={`/teams/${tmId}`} className="flex flex-col items-center text-center pt-2">
                       <div
                         className="w-16 h-16 rounded-2xl flex items-center justify-center font-digital font-bold text-white text-xl shadow-md mb-3 transition-transform group-hover:scale-105"
                         style={{ backgroundColor: tmColor }}
@@ -997,9 +1200,20 @@ const TournamentDetailsPage = () => {
                       <h4 className="font-bold text-white text-base group-hover:text-orange-400 transition-colors">
                         {tmName}
                       </h4>
-                      <p className="text-xs text-slate-400 font-mono mt-1">
+                      <p className="text-xs text-slate-400 font-mono mt-0.5">
                         Coach: {tmCoach}
                       </p>
+
+                      {/* Tournament Score & Record Pill */}
+                      <div className="flex items-center justify-between w-full mt-3 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono">
+                        <span className="text-amber-400 font-digital font-bold text-sm flex items-center gap-1">
+                          <Flame className="w-3.5 h-3.5 text-amber-500" />
+                          <span>{pointsFor} PTS</span>
+                        </span>
+                        <span className="text-slate-400 font-bold">
+                          {won}W - {lost}L
+                        </span>
+                      </div>
                     </Link>
 
                     {(isAdmin || isScorer) && (

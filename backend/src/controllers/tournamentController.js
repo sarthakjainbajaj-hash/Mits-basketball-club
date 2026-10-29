@@ -244,15 +244,24 @@ const getTournamentStandings = async (req, res) => {
       };
     });
 
-    // Sort by: PTS (desc), Won (desc), Difference (desc), PointsFor (desc)
+    // Default to score-wise sorting (pointsFor desc: highest score on top, lowest below)
+    const sortBy = req.query.sortBy || 'score';
+
     standings.sort((a, b) => {
+      if (sortBy === 'pts') {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        if (b.pointsFor !== a.pointsFor) return b.pointsFor - a.pointsFor;
+        if (b.won !== a.won) return b.won - a.won;
+        return b.difference - a.difference;
+      }
+      // Score-wise (pointsFor / PF)
+      if (b.pointsFor !== a.pointsFor) return b.pointsFor - a.pointsFor;
       if (b.pts !== a.pts) return b.pts - a.pts;
       if (b.won !== a.won) return b.won - a.won;
-      if (b.difference !== a.difference) return b.difference - a.difference;
-      return b.pointsFor - a.pointsFor;
+      return b.difference - a.difference;
     });
 
-    res.status(200).json({ success: true, data: standings });
+    res.status(200).json({ success: true, data: standings, sortBy });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
