@@ -69,6 +69,10 @@ const getTournamentById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Tournament not found' });
     }
 
+    if (tournament.teams) {
+      tournament.teams = tournament.teams.filter(Boolean);
+    }
+
     // Fetch tournament matches with populated team data in a single lean query
     const matches = await Match.find({ tournamentId: tournament._id })
       .populate('teamA', 'name shortName logo primaryColor secondaryColor')
@@ -114,6 +118,10 @@ const getTournamentStandings = async (req, res) => {
     const tournament = await Tournament.findById(req.params.id).populate('teams').lean();
     if (!tournament) {
       return res.status(404).json({ success: false, message: 'Tournament not found' });
+    }
+
+    if (tournament.teams) {
+      tournament.teams = tournament.teams.filter(Boolean);
     }
 
     // Populate teamA and teamB upfront with lean query for 0 database calls in loop
@@ -396,7 +404,7 @@ const generateFixtures = async (req, res) => {
     const tournament = await Tournament.findById(req.params.id).populate('teams');
     if (!tournament) return res.status(404).json({ success: false, message: 'Tournament not found' });
 
-    const teams = tournament.teams || [];
+    const teams = (tournament.teams || []).filter(Boolean);
     if (teams.length < 2) {
       return res.status(400).json({
         success: false,

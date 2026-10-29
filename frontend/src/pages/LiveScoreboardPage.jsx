@@ -1103,7 +1103,7 @@ const LiveScoreboardPage = () => {
   })();
 
   return (
-    <div className="max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5">
+    <div className="w-full max-w-[1550px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5 overflow-x-hidden">
       {/* Top Console Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl">
         <div className="flex items-center gap-3">
@@ -1115,7 +1115,7 @@ const LiveScoreboardPage = () => {
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Match Format Badge */}
               <span
                 className={`text-[10px] font-mono font-black uppercase px-2.5 py-0.5 rounded-full border ${

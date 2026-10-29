@@ -114,12 +114,14 @@ const TournamentDetailsPage = () => {
   const fetchTournamentData = async () => {
     try {
       setLoading(true);
-      const [tRes, sRes] = await Promise.all([
+      const [tRes, sRes, teamsRes] = await Promise.allSettled([
         tournamentApi.getById(id),
         tournamentApi.getStandings(id),
+        teamApi.getAll(),
       ]);
-      setTournament(tRes?.data || null);
-      setStandings(sRes?.data || []);
+      if (tRes.status === 'fulfilled') setTournament(tRes.value?.data || null);
+      if (sRes.status === 'fulfilled') setStandings(sRes.value?.data || []);
+      if (teamsRes.status === 'fulfilled') setAllTeams(teamsRes.value?.data || []);
     } catch (err) {
       setToast({ message: 'Failed to load tournament: ' + err.message, type: 'error' });
     } finally {
@@ -283,18 +285,35 @@ const TournamentDetailsPage = () => {
     }
   };
 
+  const getTeamId = (t) => {
+    if (!t) return '';
+    return (t._id ? t._id.toString() : t.toString()) || '';
+  };
+
+  const getTeamName = (t) => {
+    if (!t) return 'Unknown Team';
+    if (typeof t === 'object' && t.name) return t.name;
+    const tid = getTeamId(t);
+    const found = allTeams.find((item) => getTeamId(item) === tid);
+    return found?.name || (typeof t === 'object' && t.shortName) || (found?.shortName) || `Team (${tid ? tid.slice(-4) : '?'})`;
+  };
+
   // Open Fix Match Modal
   const handleOpenFixMatchModal = () => {
-    const teamsList = tournament?.teams || [];
+    const teamsList = (tournament?.teams || []).filter(Boolean);
     const defaultName = `Match ${(tournament?.matches?.length || 0) + 1}`;
+    const tFormat = tournament?.format === '3x3' ? '3x3' : '5x5';
+    const idA = teamsList[0] ? getTeamId(teamsList[0]) : '';
+    const idB = teamsList[1] ? getTeamId(teamsList[1]) : '';
+
     setMatchForm({
       matchName: defaultName,
-      matchType: '5x5',
-      matchStructure: 'QUARTERS',
-      quarterDuration: 600,
-      shotClock: 24,
-      teamA: teamsList[0]?._id || '',
-      teamB: teamsList[1]?._id || '',
+      matchType: tFormat,
+      matchStructure: tFormat === '3x3' ? 'SINGLE' : 'QUARTERS',
+      quarterDuration: tFormat === '3x3' ? 600 : 600,
+      shotClock: tFormat === '3x3' ? 12 : 24,
+      teamA: idA,
+      teamB: idB,
       scheduledDate: new Date().toISOString().split('T')[0],
       scheduledTime: '18:00',
       venue: tournament?.venue || 'Main Court',
@@ -320,9 +339,9 @@ const TournamentDetailsPage = () => {
         tournamentId: id,
         settings: {
           matchStructure: matchForm.matchType === '3x3' ? 'SINGLE' : matchForm.matchStructure,
-          quarterDuration: matchForm.quarterDuration,
-          gameDuration: matchForm.quarterDuration,
-          shotClock: matchForm.shotClock,
+          quarterDuration: Number(matchForm.quarterDuration),
+          gameDuration: Number(matchForm.quarterDuration),
+          shotClock: Number(matchForm.shotClock),
           numberOfQuarters: matchForm.matchStructure === 'HALVES' ? 2 : (matchForm.matchType === '3x3' ? 1 : 4),
         },
       });
@@ -440,8 +459,8 @@ const TournamentDetailsPage = () => {
     return true;
   });
 
-  const tournamentTeams = tournament.teams || [];
-  const tournamentTeamIds = tournamentTeams.map((t) => (t._id ? t._id.toString() : t.toString()));
+  const tournamentTeams = (tournament.teams || []).filter(Boolean);
+  const tournamentTeamIds = tournamentTeams.map((t) => getTeamId(t)).filter(Boolean);
 
   const searchedTeams = allTeams.filter((t) =>
     t.name?.toLowerCase().includes(teamSearch.toLowerCase()) ||
@@ -449,9 +468,9 @@ const TournamentDetailsPage = () => {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 overflow-x-hidden">
       {/* Back Link & Admin Actions */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <Link
           to="/tournaments"
           className="inline-flex items-center gap-2 text-xs font-mono font-bold text-slate-400 hover:text-white transition-colors"
@@ -600,8 +619,8 @@ const TournamentDetailsPage = () => {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+          <div className="overflow-x-auto w-full max-w-full pb-2">
+            <table className="w-full min-w-[680px] text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-mono text-xs uppercase tracking-wider">
                   <th className="py-3 px-3 text-center">Rank</th>
@@ -731,7 +750,7 @@ const TournamentDetailsPage = () => {
                   >
                     <div>
                       {/* Top Badges */}
-                      <div className="flex items-center justify-between text-xs text-slate-400 font-mono mb-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 font-mono mb-3">
                         <div className="flex items-center gap-2">
                           <span
                             className={`px-2.5 py-0.5 rounded font-bold uppercase text-[11px] ${
@@ -755,7 +774,7 @@ const TournamentDetailsPage = () => {
                           <button
                             type="button"
                             onClick={() => handleOpenRescheduleModal(m)}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-slate-700/80 transition-all text-xs font-mono font-bold group"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-slate-700/80 transition-all text-xs font-mono font-bold group flex-shrink-0"
                             title="Click to edit match date & timing"
                           >
                             <Calendar className="w-3.5 h-3.5 text-amber-400" />
@@ -763,7 +782,7 @@ const TournamentDetailsPage = () => {
                             <Edit3 className="w-3 h-3 text-slate-400 group-hover:text-white" />
                           </button>
                         ) : (
-                          <span className="flex items-center gap-1 text-slate-400">
+                          <span className="flex items-center gap-1 text-slate-400 flex-shrink-0">
                             <Clock className="w-3.5 h-3.5 text-slate-500" />
                             {new Date(m.scheduledDate).toLocaleDateString()} @ {m.scheduledTime || '18:00'}
                           </span>
@@ -771,10 +790,10 @@ const TournamentDetailsPage = () => {
                       </div>
 
                       {/* Match Name & Venue */}
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <h4 className="font-bold text-white text-base tracking-tight">{m.matchName}</h4>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <h4 className="font-bold text-white text-base tracking-tight truncate min-w-0 max-w-[70%]">{m.matchName}</h4>
                         {m.venue && (
-                          <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                          <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1 flex-shrink-0">
                             <MapPin className="w-3 h-3 text-slate-500" />
                             {m.venue}
                           </span>
@@ -783,7 +802,7 @@ const TournamentDetailsPage = () => {
 
                       {/* Scoreboard Display Box */}
                       <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800/80 my-2">
-                        <div className="flex items-center gap-2.5 max-w-[40%]">
+                        <div className="flex items-center gap-2.5 min-w-0 max-w-[38%]">
                           <span
                             className="w-3.5 h-3.5 rounded-full flex-shrink-0"
                             style={{ backgroundColor: m.teamA?.primaryColor || '#FF5722' }}
@@ -793,13 +812,13 @@ const TournamentDetailsPage = () => {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2 font-digital font-bold text-amber-400 text-xl px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 tracking-[0.16em]">
+                        <div className="flex items-center gap-2 font-digital font-bold text-amber-400 text-xl px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 tracking-[0.16em] flex-shrink-0">
                           <span>{m.scoreA ?? 0}</span>
                           <span className="text-slate-600 text-sm font-sans">-</span>
                           <span>{m.scoreB ?? 0}</span>
                         </div>
 
-                        <div className="flex items-center gap-2.5 max-w-[40%] justify-end">
+                        <div className="flex items-center gap-2.5 min-w-0 max-w-[38%] justify-end">
                           <span className="font-bold text-white text-sm truncate text-right">
                             {m.teamB?.name || 'Team B'}
                           </span>
@@ -812,7 +831,7 @@ const TournamentDetailsPage = () => {
                     </div>
 
                     {/* Actions Row */}
-                    <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-slate-800/60">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-3 border-t border-slate-800/60">
                       <div>
                         {(isAdmin || isScorer) && (
                           <button
@@ -825,7 +844,7 @@ const TournamentDetailsPage = () => {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 justify-end flex-1">
                         {isCompleted && (
                           <Link
                             to={`/matches/${m._id}`}
@@ -932,52 +951,60 @@ const TournamentDetailsPage = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {tournamentTeams.length > 0 ? (
-              tournamentTeams.map((tm) => (
-                <div
-                  key={tm._id}
-                  className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between group relative overflow-hidden"
-                >
+              tournamentTeams.map((tm) => {
+                const tmId = getTeamId(tm);
+                const tmName = getTeamName(tm);
+                const tmColor = tm?.primaryColor || '#FF5722';
+                const tmShort = tm?.shortName || tmName.slice(0, 3);
+                const tmCoach = tm?.coach || 'Head Coach';
+
+                return (
                   <div
-                    className="absolute top-0 left-0 right-0 h-1"
-                    style={{ backgroundColor: tm.primaryColor || '#FF5722' }}
-                  />
-
-                  <Link to={`/teams/${tm._id}`} className="flex flex-col items-center text-center">
+                    key={tmId}
+                    className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between group relative overflow-hidden"
+                  >
                     <div
-                      className="w-16 h-16 rounded-2xl flex items-center justify-center font-digital font-bold text-white text-xl shadow-md mb-3 transition-transform group-hover:scale-105"
-                      style={{ backgroundColor: tm.primaryColor || '#FF5722' }}
-                    >
-                      {tm.shortName || tm.name?.slice(0, 3)}
-                    </div>
-                    <h4 className="font-bold text-white text-base group-hover:text-orange-400 transition-colors">
-                      {tm.name}
-                    </h4>
-                    <p className="text-xs text-slate-400 font-mono mt-1">
-                      Coach: {tm.coach || 'Head Coach'}
-                    </p>
-                  </Link>
+                      className="absolute top-0 left-0 right-0 h-1"
+                      style={{ backgroundColor: tmColor }}
+                    />
 
-                  {(isAdmin || isScorer) && (
-                    <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
-                      <Link
-                        to={`/teams/${tm._id}`}
-                        className="text-xs text-slate-400 hover:text-white font-mono flex items-center gap-1"
+                    <Link to={`/teams/${tmId}`} className="flex flex-col items-center text-center">
+                      <div
+                        className="w-16 h-16 rounded-2xl flex items-center justify-center font-digital font-bold text-white text-xl shadow-md mb-3 transition-transform group-hover:scale-105"
+                        style={{ backgroundColor: tmColor }}
                       >
-                        <span>Roster</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </Link>
+                        {tmShort}
+                      </div>
+                      <h4 className="font-bold text-white text-base group-hover:text-orange-400 transition-colors">
+                        {tmName}
+                      </h4>
+                      <p className="text-xs text-slate-400 font-mono mt-1">
+                        Coach: {tmCoach}
+                      </p>
+                    </Link>
 
-                      <button
-                        onClick={() => handleRemoveTeam(tm._id, tm.name)}
-                        className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/80 border border-red-800/40 text-red-400 hover:text-white text-xs font-mono transition-all"
-                        title="Remove from tournament"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
+                    {(isAdmin || isScorer) && (
+                      <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                        <Link
+                          to={`/teams/${tmId}`}
+                          className="text-xs text-slate-400 hover:text-white font-mono flex items-center gap-1"
+                        >
+                          <span>Roster</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+
+                        <button
+                          onClick={() => handleRemoveTeam(tmId, tmName)}
+                          className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/80 border border-red-800/40 text-red-400 hover:text-white text-xs font-mono transition-all"
+                          title="Remove from tournament"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             ) : (
               <div className="col-span-full text-center py-12 rounded-3xl bg-slate-900/40 border border-dashed border-slate-800">
                 <p className="text-slate-400 font-medium text-sm">
@@ -1101,8 +1128,8 @@ const TournamentDetailsPage = () => {
       {/* MODAL 2: FIX / SCHEDULE MATCH MODAL */}
       {isFixMatchModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
               <div>
                 <h3 className="font-bold text-white text-lg">Fix Match / Schedule Fixture</h3>
                 <p className="text-xs text-slate-400 font-mono">
@@ -1342,7 +1369,7 @@ const TournamentDetailsPage = () => {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
                       Team A
@@ -1354,11 +1381,15 @@ const TournamentDetailsPage = () => {
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
                     >
                       <option value="">Select Team A</option>
-                      {tournamentTeams.map((t) => (
-                        <option key={t._id} value={t._id} disabled={t._id === matchForm.teamB}>
-                          {t.name}
-                        </option>
-                      ))}
+                      {tournamentTeams.map((t) => {
+                        const tid = getTeamId(t);
+                        const tname = getTeamName(t);
+                        return (
+                          <option key={tid} value={tid} disabled={tid === matchForm.teamB}>
+                            {tname}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -1373,16 +1404,20 @@ const TournamentDetailsPage = () => {
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
                     >
                       <option value="">Select Team B</option>
-                      {tournamentTeams.map((t) => (
-                        <option key={t._id} value={t._id} disabled={t._id === matchForm.teamA}>
-                          {t.name}
-                        </option>
-                      ))}
+                      {tournamentTeams.map((t) => {
+                        const tid = getTeamId(t);
+                        const tname = getTeamName(t);
+                        return (
+                          <option key={tid} value={tid} disabled={tid === matchForm.teamA}>
+                            {tname}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
                       Date

@@ -46,9 +46,9 @@ const AppLayout = ({ children }) => {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-hoop-dark text-slate-100">
+    <div className="flex flex-col min-h-screen w-full max-w-full overflow-x-hidden bg-hoop-dark text-slate-100">
       <Navbar />
-      <main className="flex-1 pb-12">
+      <main className="flex-1 w-full max-w-full overflow-x-hidden pb-12">
         <ErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             {children}

@@ -117,7 +117,7 @@ const TournamentsPage = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 overflow-x-hidden">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -152,8 +152,8 @@ const TournamentsPage = () => {
               className="rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 p-6 backdrop-blur-sm shadow-xl flex flex-col justify-between transition-all group"
             >
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span
                       className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full border ${
                         t.status === 'ONGOING'
@@ -187,7 +187,7 @@ const TournamentsPage = () => {
                       </button>
                     )}
                   </div>
-                  <span className="text-xs text-slate-400 font-mono flex items-center gap-1">
+                  <span className="text-xs text-slate-400 font-mono flex items-center gap-1 flex-shrink-0">
                     <Calendar className="w-3.5 h-3.5" />
                     {new Date(t.startDate).toLocaleDateString()}
                   </span>
