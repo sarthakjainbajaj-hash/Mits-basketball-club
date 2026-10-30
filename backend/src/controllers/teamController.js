@@ -34,24 +34,26 @@ const getTeams = async (req, res) => {
 // @access  Public
 const getTeamById = async (req, res) => {
   try {
-    const team = await Team.findById(req.params.id).populate('players');
+    const [team, matches] = await Promise.all([
+      Team.findById(req.params.id).populate('players').lean(),
+      Match.find({
+        $or: [{ teamA: req.params.id }, { teamB: req.params.id }],
+      })
+        .populate('teamA', 'name shortName logo primaryColor')
+        .populate('teamB', 'name shortName logo primaryColor')
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean(),
+    ]);
+
     if (!team) {
       return res.status(404).json({ success: false, message: 'Team not found' });
     }
 
-    // Get team matches (recent 10)
-    const matches = await Match.find({
-      $or: [{ teamA: team._id }, { teamB: team._id }],
-    })
-      .populate('teamA', 'name shortName logo primaryColor')
-      .populate('teamB', 'name shortName logo primaryColor')
-      .sort({ createdAt: -1 })
-      .limit(10);
-
     res.status(200).json({
       success: true,
       data: {
-        ...team.toObject(),
+        ...team,
         recentMatches: matches,
       },
     });

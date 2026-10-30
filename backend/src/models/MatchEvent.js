@@ -84,4 +84,8 @@ const matchEventSchema = new mongoose.Schema(
   }
 );
 
+// Compound indexes for instantaneous live event history fetching
+matchEventSchema.index({ matchId: 1, createdAt: -1 });
+matchEventSchema.index({ matchId: 1, timestamp: -1 });
+
 module.exports = mongoose.model('MatchEvent', matchEventSchema);

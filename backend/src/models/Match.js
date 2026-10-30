@@ -271,8 +271,11 @@ matchSchema.methods.getCurrentShotClockRemaining = function () {
 // Indexes for fast lookups
 matchSchema.index({ status: 1, createdAt: -1 });
 matchSchema.index({ tournamentId: 1, createdAt: -1 });
+matchSchema.index({ tournamentId: 1, status: 1 });
+matchSchema.index({ tournamentId: 1, scheduledDate: 1, scheduledTime: 1 });
 matchSchema.index({ matchType: 1, status: 1 });
 matchSchema.index({ teamA: 1, teamB: 1 });
 matchSchema.index({ assignedScorer: 1 });
+matchSchema.index({ scheduledDate: 1 });
 
 module.exports = mongoose.model('Match', matchSchema);

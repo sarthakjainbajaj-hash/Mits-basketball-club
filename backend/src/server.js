@@ -18,6 +18,13 @@ const teamRoutes = require('./routes/teamRoutes');
 const playerRoutes = require('./routes/playerRoutes');
 const tournamentRoutes = require('./routes/tournamentRoutes');
 const matchRoutes = require('./routes/matchRoutes');
+const performanceRoutes = require('./routes/performanceRoutes');
+
+const compression = require('compression');
+const { performanceMiddleware, installMongoosePerformancePlugin } = require('./middleware/performanceTracker');
+
+// Install automated DB query timing tracker
+installMongoosePerformancePlugin();
 
 const app = express();
 const server = http.createServer(app);
@@ -90,7 +97,10 @@ app.use('/api/auth/register', authLimiter);
 app.use('/auth/login', authLimiter);
 app.use('/auth/register', authLimiter);
 
-// Core Middleware
+// Core Middleware (Compression for payload size reduction, Performance Timing Tracker)
+app.use(compression());
+app.use(performanceMiddleware);
+
 app.use(
   cors({
     origin: corsOriginHandler,
@@ -126,12 +136,14 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/matches', matchRoutes);
+app.use('/api/performance', performanceRoutes);
 
 app.use('/auth', authRoutes);
 app.use('/teams', teamRoutes);
 app.use('/players', playerRoutes);
 app.use('/tournaments', tournamentRoutes);
 app.use('/matches', matchRoutes);
+app.use('/performance', performanceRoutes);
 
 // Serve static frontend build when dist directory exists
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');

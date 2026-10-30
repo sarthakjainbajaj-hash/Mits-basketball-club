@@ -1,7 +1,10 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+const { recordAuthTime } = require('./performanceTracker');
+
 const protect = async (req, res, next) => {
+  const authStart = process.hrtime.bigint();
   let token;
 
   if (
@@ -24,7 +27,9 @@ const protect = async (req, res, next) => {
       process.env.JWT_SECRET || 'hoopscore_super_secret_jwt_key_2026_basketball_3x3'
     );
 
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id)
+      .select('_id name email role tokenVersion isSuspended')
+      .lean();
 
     if (!user) {
       return res.status(401).json({
@@ -49,6 +54,8 @@ const protect = async (req, res, next) => {
     }
 
     req.user = user;
+    const authElapsedMs = Number(process.hrtime.bigint() - authStart) / 1e6;
+    recordAuthTime(authElapsedMs);
     next();
   } catch (err) {
     return res.status(401).json({

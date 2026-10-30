@@ -66,6 +66,11 @@ const connectDB = async () => {
     try {
       await mongoose.connect(uri, {
         serverSelectionTimeoutMS: 5000,
+        maxPoolSize: 30,
+        minPoolSize: 5,
+        socketTimeoutMS: 45000,
+        connectTimeoutMS: 10000,
+        heartbeatFrequencyMS: 10000,
       });
       console.log(`[DB] Connected successfully to external MongoDB at ${mongoose.connection.host}`);
       await seedInitialUsers();

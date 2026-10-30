@@ -12,15 +12,13 @@ const formatTime = (seconds) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-// Helper to fetch fully populated match object with live computed remaining times
+// Helper to fetch fully populated match object with live computed remaining times (optimized lean populates)
 const getFullMatchData = async (matchId) => {
   const populatedMatch = await Match.findById(matchId)
     .populate('teamA', 'name shortName logo primaryColor secondaryColor coach captain viceCaptain')
     .populate('teamB', 'name shortName logo primaryColor secondaryColor coach captain viceCaptain')
     .populate('tournamentId', 'name venue')
     .populate('assignedScorer', 'name email role')
-    .populate('playersA.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
-    .populate('playersB.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
     .populate('teamA_roster.starters.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
     .populate('teamA_roster.substitutes.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
     .populate('teamB_roster.starters.player', 'name jerseyNumber position profileImage isCaptain isViceCaptain')
@@ -28,6 +26,10 @@ const getFullMatchData = async (matchId) => {
     .lean();
 
   if (!populatedMatch) return null;
+
+  // Provide fallback empty arrays for legacy playersA and playersB if requested
+  populatedMatch.playersA = populatedMatch.playersA || [];
+  populatedMatch.playersB = populatedMatch.playersB || [];
 
   populatedMatch.serverTime = Date.now();
   return populatedMatch;
@@ -244,32 +246,15 @@ const persistMatchStats = async (match) => {
     if (match.winner === 'A') teamA.stats[formatKey].wins = (teamA.stats[formatKey].wins || 0) + 1;
     if (match.winner === 'B') teamA.stats[formatKey].losses = (teamA.stats[formatKey].losses || 0) + 1;
 
-    await teamA.save();
-  }
-
-  if (teamB) {
-    teamB.stats = teamB.stats || {};
-    teamB.stats.played = (teamB.stats.played || 0) + 1;
-    teamB.stats.pointsFor = (teamB.stats.pointsFor || 0) + (match.scoreB || 0);
-    teamB.stats.pointsAgainst = (teamB.stats.pointsAgainst || 0) + (match.scoreA || 0);
-    if (match.winner === 'B') teamB.stats.wins = (teamB.stats.wins || 0) + 1;
-    if (match.winner === 'A') teamB.stats.losses = (teamB.stats.losses || 0) + 1;
-
-    if (!teamB.stats[formatKey]) {
-      teamB.stats[formatKey] = { played: 0, wins: 0, losses: 0 };
-    }
-    teamB.stats[formatKey].played = (teamB.stats[formatKey].played || 0) + 1;
-    if (match.winner === 'B') teamB.stats[formatKey].wins = (teamB.stats[formatKey].wins || 0) + 1;
-    if (match.winner === 'A') teamB.stats[formatKey].losses = (teamB.stats[formatKey].losses || 0) + 1;
-
-    await teamB.save();
+    await Promise.all([teamA ? teamA.save() : Promise.resolve(), teamB ? teamB.save() : Promise.resolve()]);
   }
 
   if (match.playerStats && match.playerStats.length > 0) {
-    for (const pStat of match.playerStats) {
-      const targetPlayerId = pStat.playerId?._id || pStat.playerId;
-      if (targetPlayerId) {
-        await Player.findByIdAndUpdate(targetPlayerId, {
+    const updatePromises = match.playerStats
+      .filter((pStat) => Boolean(pStat.playerId?._id || pStat.playerId))
+      .map((pStat) => {
+        const targetPlayerId = pStat.playerId?._id || pStat.playerId;
+        return Player.findByIdAndUpdate(targetPlayerId, {
           $inc: {
             'stats.games': 1,
             'stats.points': pStat.points || 0,
@@ -283,8 +268,8 @@ const persistMatchStats = async (match) => {
             'stats.fouls': pStat.fouls || 0,
           },
         });
-      }
-    }
+      });
+    await Promise.all(updatePromises);
   }
 
   match.statsPersisted = true;
@@ -299,8 +284,10 @@ const revertMatchStats = async (match) => {
   const teamAId = match.teamA?._id || match.teamA;
   const teamBId = match.teamB?._id || match.teamB;
 
-  const teamA = teamAId ? await Team.findById(teamAId) : null;
-  const teamB = teamBId ? await Team.findById(teamBId) : null;
+  const [teamA, teamB] = await Promise.all([
+    teamAId ? Team.findById(teamAId) : null,
+    teamBId ? Team.findById(teamBId) : null,
+  ]);
 
   if (teamA && teamA.stats) {
     teamA.stats.played = Math.max(0, (teamA.stats.played || 0) - 1);
@@ -314,7 +301,6 @@ const revertMatchStats = async (match) => {
       if (match.winner === 'A') teamA.stats[formatKey].wins = Math.max(0, (teamA.stats[formatKey].wins || 0) - 1);
       if (match.winner === 'B') teamA.stats[formatKey].losses = Math.max(0, (teamA.stats[formatKey].losses || 0) - 1);
     }
-    await teamA.save();
   }
 
   if (teamB && teamB.stats) {
@@ -329,14 +315,16 @@ const revertMatchStats = async (match) => {
       if (match.winner === 'B') teamB.stats[formatKey].wins = Math.max(0, (teamB.stats[formatKey].wins || 0) - 1);
       if (match.winner === 'A') teamB.stats[formatKey].losses = Math.max(0, (teamB.stats[formatKey].losses || 0) - 1);
     }
-    await teamB.save();
   }
 
+  await Promise.all([teamA ? teamA.save() : Promise.resolve(), teamB ? teamB.save() : Promise.resolve()]);
+
   if (match.playerStats && match.playerStats.length > 0) {
-    for (const pStat of match.playerStats) {
-      const targetPlayerId = pStat.playerId?._id || pStat.playerId;
-      if (targetPlayerId) {
-        await Player.findByIdAndUpdate(targetPlayerId, {
+    const revertPromises = match.playerStats
+      .filter((pStat) => Boolean(pStat.playerId?._id || pStat.playerId))
+      .map((pStat) => {
+        const targetPlayerId = pStat.playerId?._id || pStat.playerId;
+        return Player.findByIdAndUpdate(targetPlayerId, {
           $inc: {
             'stats.games': -1,
             'stats.points': -(pStat.points || 0),
@@ -350,8 +338,8 @@ const revertMatchStats = async (match) => {
             'stats.fouls': -(pStat.fouls || 0),
           },
         });
-      }
-    }
+      });
+    await Promise.all(revertPromises);
   }
 
   match.statsPersisted = false;

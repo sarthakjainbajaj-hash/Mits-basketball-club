@@ -28,6 +28,7 @@ const PublicScoreboardPage = lazy(() => import('./pages/PublicScoreboardPage'));
 const MatchHistoryPage = lazy(() => import('./pages/MatchHistoryPage'));
 const MatchDetailsPage = lazy(() => import('./pages/MatchDetailsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const PerformanceDashboardPage = lazy(() => import('./pages/PerformanceDashboardPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 const PageLoader = () => (
@@ -125,6 +126,24 @@ function App() {
 
                 {/* Settings */}
                 <Route path="/settings" element={<SettingsPage />} />
+
+                {/* Admin Performance Telemetry & Monitoring Dashboard */}
+                <Route
+                  path="/performance"
+                  element={
+                    <ProtectedRoute allowedRoles={['superadmin', 'admin']}>
+                      <PerformanceDashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/performance"
+                  element={
+                    <ProtectedRoute allowedRoles={['superadmin', 'admin']}>
+                      <PerformanceDashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* 404 Route */}
                 <Route path="*" element={<NotFoundPage />} />

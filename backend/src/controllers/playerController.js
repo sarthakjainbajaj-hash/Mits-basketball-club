@@ -37,7 +37,9 @@ const getPlayers = async (req, res) => {
 // @access  Public
 const getPlayerById = async (req, res) => {
   try {
-    const player = await Player.findById(req.params.id).populate('teamId');
+    const player = await Player.findById(req.params.id)
+      .populate('teamId', 'name shortName logo primaryColor')
+      .lean();
     if (!player) {
       return res.status(404).json({ success: false, message: 'Player not found' });
     }

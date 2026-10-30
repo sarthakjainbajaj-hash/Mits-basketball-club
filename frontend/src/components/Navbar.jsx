@@ -179,6 +179,18 @@ const Navbar = () => {
               <Settings className="w-4 h-4" />
             </Link>
 
+            {/* Performance Telemetry Link (Admin only) */}
+            {isAdmin && (
+              <Link
+                to="/performance"
+                className="p-2 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-orange-400 hover:border-orange-500/30 hover:bg-slate-800 transition-colors flex-shrink-0"
+                title="Performance & Latency Monitor"
+                aria-label="Performance Monitor"
+              >
+                <Activity className="w-4 h-4 text-orange-400" />
+              </Link>
+            )}
+
             {/* User Profile or Login */}
             {user ? (
               <div className="flex items-center space-x-2 pl-2 border-l border-slate-800 flex-shrink-0">
@@ -328,6 +340,26 @@ const Navbar = () => {
                   </div>
                 </Link>
               </div>
+
+              {/* Performance Telemetry Link (Admin only) */}
+              {isAdmin && (
+                <Link
+                  to="/performance"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between p-3 rounded-2xl bg-orange-950/20 border border-orange-500/30 text-orange-300 text-xs font-semibold min-h-[48px] transition-all"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-orange-600/20 text-orange-400">
+                      <Activity className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white">Performance Telemetry</div>
+                      <div className="text-[10px] font-mono text-orange-400/80">API & DB Latency Monitor</div>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-orange-400" />
+                </Link>
+              )}
 
               {/* Realtime Sync Status Card */}
               <div className="p-3 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-xs font-mono">

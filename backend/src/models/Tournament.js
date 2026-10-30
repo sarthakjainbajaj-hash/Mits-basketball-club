@@ -52,4 +52,8 @@ const tournamentSchema = new mongoose.Schema(
   }
 );
 
+// Indexes for fast tournament listing & status filtering
+tournamentSchema.index({ startDate: -1 });
+tournamentSchema.index({ status: 1, startDate: -1 });
+
 module.exports = mongoose.model('Tournament', tournamentSchema);

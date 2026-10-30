@@ -70,106 +70,61 @@ const getMatchById = async (req, res) => {
       .populate('teamA', 'name shortName logo primaryColor secondaryColor coach')
       .populate('teamB', 'name shortName logo primaryColor secondaryColor coach')
       .populate('tournamentId', 'name venue organizer')
-      .populate('playersA.player', 'name jerseyNumber position profileImage')
-      .populate('playersB.player', 'name jerseyNumber position profileImage')
       .populate('teamA_roster.starters.player', 'name jerseyNumber position profileImage')
       .populate('teamA_roster.substitutes.player', 'name jerseyNumber position profileImage')
       .populate('teamB_roster.starters.player', 'name jerseyNumber position profileImage')
       .populate('teamB_roster.substitutes.player', 'name jerseyNumber position profileImage')
-      .populate('assignedScorer', 'name email role');
+      .populate('assignedScorer', 'name email role')
+      .lean();
 
     if (!match) {
       return res.status(404).json({ success: false, message: 'Match not found' });
     }
 
-    // Auto-sync newly registered players from team directory for SCHEDULED matches
-    if (match.status === 'SCHEDULED' && match.teamA && match.teamB) {
+    // Only auto-sync on initial setup if rosters are completely empty for scheduled match
+    const needsInitialRoster =
+      match.status === 'SCHEDULED' &&
+      (!match.teamA_roster?.starters?.length && !match.teamA_roster?.substitutes?.length) &&
+      match.teamA &&
+      match.teamB;
+
+    if (needsInitialRoster) {
       try {
-        const teamAId = match.teamA._id || match.teamA;
-        const teamBId = match.teamB._id || match.teamB;
-        const [teamAPlayers, teamBPlayers] = await Promise.all([
-          Player.find({ teamId: teamAId }),
-          Player.find({ teamId: teamBId }),
-        ]);
+        const fullDoc = await Match.findById(match._id);
+        if (fullDoc) {
+          const teamAId = fullDoc.teamA?._id || fullDoc.teamA;
+          const teamBId = fullDoc.teamB?._id || fullDoc.teamB;
+          const [teamAPlayers, teamBPlayers] = await Promise.all([
+            Player.find({ teamId: teamAId }).lean(),
+            Player.find({ teamId: teamBId }).lean(),
+          ]);
 
-        let modified = false;
-        const starterAIds = (match.teamA_roster?.starters || []).map((p) => (p.player?._id || p.player || '').toString());
-        const subAIds = (match.teamA_roster?.substitutes || []).map((p) => (p.player?._id || p.player || '').toString());
-        for (const p of teamAPlayers) {
-          const pid = p._id.toString();
-          if (!starterAIds.includes(pid) && !subAIds.includes(pid)) {
-            match.teamA_roster.substitutes.push({
+          teamAPlayers.forEach((p) => {
+            fullDoc.teamA_roster.substitutes.push({
               player: p._id,
               name: p.name,
               jerseyNumber: p.jerseyNumber,
               position: p.position || 'Guard',
             });
-            match.playersA.push({
+          });
+          teamBPlayers.forEach((p) => {
+            fullDoc.teamB_roster.substitutes.push({
               player: p._id,
               name: p.name,
               jerseyNumber: p.jerseyNumber,
               position: p.position || 'Guard',
             });
-            if (!match.playerStats.some((s) => (s.playerId?._id || s.playerId || '').toString() === pid)) {
-              match.playerStats.push({
-                playerId: p._id,
-                playerName: p.name,
-                jerseyNumber: p.jerseyNumber,
-                teamId: teamAId,
-                team: 'A',
-                isStarter: false,
-                isActive: false,
-                points: 0, onePoints: 0, twoPoints: 0, threePoints: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0,
-              });
-            }
-            modified = true;
-          }
-        }
-
-        const starterBIds = (match.teamB_roster?.starters || []).map((p) => (p.player?._id || p.player || '').toString());
-        const subBIds = (match.teamB_roster?.substitutes || []).map((p) => (p.player?._id || p.player || '').toString());
-        for (const p of teamBPlayers) {
-          const pid = p._id.toString();
-          if (!starterBIds.includes(pid) && !subBIds.includes(pid)) {
-            match.teamB_roster.substitutes.push({
-              player: p._id,
-              name: p.name,
-              jerseyNumber: p.jerseyNumber,
-              position: p.position || 'Guard',
-            });
-            match.playersB.push({
-              player: p._id,
-              name: p.name,
-              jerseyNumber: p.jerseyNumber,
-              position: p.position || 'Guard',
-            });
-            if (!match.playerStats.some((s) => (s.playerId?._id || s.playerId || '').toString() === pid)) {
-              match.playerStats.push({
-                playerId: p._id,
-                playerName: p.name,
-                jerseyNumber: p.jerseyNumber,
-                teamId: teamBId,
-                team: 'B',
-                isStarter: false,
-                isActive: false,
-                points: 0, onePoints: 0, twoPoints: 0, threePoints: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0,
-              });
-            }
-            modified = true;
-          }
-        }
-
-        if (modified) {
-          await match.save();
+          });
+          await fullDoc.save();
         }
       } catch (syncErr) {
-        console.error('Non-blocking roster auto-sync error in getMatchById:', syncErr);
+        console.error('Initial roster setup error in getMatchById:', syncErr.message);
       }
     }
 
-    const events = await MatchEvent.find({ matchId: match._id }).sort({ timestamp: 1 });
+    const events = await MatchEvent.find({ matchId: match._id }).sort({ timestamp: 1 }).lean();
 
-    const responseData = match.toObject();
+    const responseData = { ...match };
     responseData.serverTime = Date.now();
     responseData.events = events;
 
@@ -835,13 +790,14 @@ const getMatchSummary = async (req, res) => {
     const match = await Match.findById(req.params.id)
       .populate('teamA', 'name shortName logo primaryColor secondaryColor coach')
       .populate('teamB', 'name shortName logo primaryColor secondaryColor coach')
-      .populate('tournamentId', 'name venue organizer');
+      .populate('tournamentId', 'name venue organizer')
+      .lean();
 
     if (!match) {
       return res.status(404).json({ success: false, message: 'Match not found' });
     }
 
-    const events = await MatchEvent.find({ matchId: match._id }).sort({ timestamp: 1 });
+    const events = await MatchEvent.find({ matchId: match._id }).sort({ timestamp: 1 }).lean();
 
     const summary = {
       matchId: match._id,
