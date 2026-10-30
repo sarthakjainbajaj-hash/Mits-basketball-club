@@ -369,10 +369,18 @@ const TournamentDetailsPage = () => {
       await fetchTournamentData();
       setActiveTab('matches');
     } catch (err) {
-      setToast({
-        message: 'Failed to fix match: ' + (err.response?.data?.message || err.message),
-        type: 'error',
-      });
+      const msg = err.response?.data?.message || err.message || '';
+      if (msg.toLowerCase().includes('not authorized') || msg.toLowerCase().includes('login')) {
+        setToast({
+          message: 'Session expired or not authorized. Please log in with your Admin account.',
+          type: 'error',
+        });
+      } else {
+        setToast({
+          message: 'Failed to fix match: ' + msg,
+          type: 'error',
+        });
+      }
     } finally {
       setFixingMatch(false);
     }

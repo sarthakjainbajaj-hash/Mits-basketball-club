@@ -108,9 +108,10 @@ axiosClient.interceptors.response.use(
       'An unexpected network error occurred';
     
     // Auto logout on 401 if token was expired
-    if (error.response?.status === 401 && window.location.pathname !== '/login') {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('hoopscore_token');
       localStorage.removeItem('hoopscore_user');
+      window.dispatchEvent(new CustomEvent('hoopscore_unauthorized'));
     }
 
     return Promise.reject(new Error(message));

@@ -6,8 +6,10 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try {
+      const savedToken = localStorage.getItem('hoopscore_token');
       const savedUser = localStorage.getItem('hoopscore_user');
-      return savedUser ? JSON.parse(savedUser) : null;
+      if (!savedToken || !savedUser) return null;
+      return JSON.parse(savedUser);
     } catch {
       return null;
     }
@@ -15,6 +17,13 @@ export const AuthProvider = ({ children }) => {
 
   const [token, setToken] = useState(() => localStorage.getItem('hoopscore_token') || null);
   const [loading, setLoading] = useState(true);
+
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('hoopscore_token');
+    localStorage.removeItem('hoopscore_user');
+  };
 
   useEffect(() => {
     const initAuth = async () => {
@@ -30,11 +39,21 @@ export const AuthProvider = ({ children }) => {
           console.warn('Auth token verification failed:', err.message);
           logout();
         }
+      } else {
+        logout();
       }
       setLoading(false);
     };
 
     initAuth();
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+    };
+    window.addEventListener('hoopscore_unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('hoopscore_unauthorized', handleUnauthorized);
   }, []);
 
   const login = async (email, password) => {
@@ -63,12 +82,6 @@ export const AuthProvider = ({ children }) => {
     throw new Error('Invalid response from registration server');
   };
 
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('hoopscore_token');
-    localStorage.removeItem('hoopscore_user');
-  };
 
   const isSuperAdmin = user?.role === 'superadmin';
   const isAdmin = user?.role === 'admin' || isSuperAdmin;
