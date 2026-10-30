@@ -500,6 +500,9 @@ const updateMatch = async (req, res) => {
     // Explicit field allowlist to strictly prevent Mass Assignment vulnerabilities
     const allowedFields = [
       'matchName',
+      'teamA',
+      'teamB',
+      'matchType',
       'venue',
       'scheduledDate',
       'scheduledTime',
@@ -512,6 +515,7 @@ const updateMatch = async (req, res) => {
       'foulLimit',
       'timeoutDuration',
       'currentPeriod',
+      'status',
       'settings',
     ];
 
@@ -521,6 +525,41 @@ const updateMatch = async (req, res) => {
         safeUpdate[key] = req.body[key];
       }
     }
+
+    // Comprehensive Settings extraction (handles nested object, flat keys, and dotted strings)
+    const currentSettings = matchToUpdate.settings ? (matchToUpdate.settings.toObject ? matchToUpdate.settings.toObject() : matchToUpdate.settings) : {};
+    let updatedSettings = { ...currentSettings };
+
+    if (req.body.settings && typeof req.body.settings === 'object') {
+      updatedSettings = { ...updatedSettings, ...req.body.settings };
+    }
+
+    if (req.body['settings.matchStructure'] || req.body.matchStructure) {
+      updatedSettings.matchStructure = req.body['settings.matchStructure'] || req.body.matchStructure;
+    }
+    if (req.body['settings.quarterDuration'] || req.body.quarterDuration) {
+      const qVal = Number(req.body['settings.quarterDuration'] || req.body.quarterDuration);
+      if (!isNaN(qVal)) {
+        updatedSettings.quarterDuration = qVal;
+        updatedSettings.gameDuration = qVal;
+        safeUpdate.quarterDuration = qVal;
+        safeUpdate.gameDuration = qVal;
+      }
+    }
+    if (req.body['settings.shotClock'] !== undefined || req.body.shotClock !== undefined) {
+      const scVal = Number(req.body['settings.shotClock'] !== undefined ? req.body['settings.shotClock'] : req.body.shotClock);
+      if (!isNaN(scVal)) {
+        updatedSettings.shotClock = scVal;
+        safeUpdate.shotClockDuration = scVal;
+        safeUpdate.shotClockRemaining = scVal;
+      }
+    }
+    if (req.body['settings.numberOfQuarters'] || req.body.numberOfQuarters) {
+      const nq = Number(req.body['settings.numberOfQuarters'] || req.body.numberOfQuarters);
+      if (!isNaN(nq)) updatedSettings.numberOfQuarters = nq;
+    }
+
+    safeUpdate.settings = updatedSettings;
 
     // Scorer reassignment check
     if (req.body.assignedScorer !== undefined) {
@@ -546,23 +585,22 @@ const updateMatch = async (req, res) => {
       safeUpdate.assignedScorerHistory = matchToUpdate.assignedScorerHistory;
     }
 
-    // If match is still scheduled, sync remainingTime if quarterDuration or gameDuration is updated
+    // If match is still scheduled, sync remainingTime and initial periods
     if (matchToUpdate.status === 'SCHEDULED') {
-      const qDur = req.body['settings.quarterDuration'] || req.body.settings?.quarterDuration || req.body.gameDuration || req.body.quarterDuration;
-      if (qDur && !isNaN(Number(qDur))) {
-        safeUpdate.remainingTime = Number(qDur);
-        safeUpdate.gameDuration = Number(qDur);
+      if (updatedSettings.quarterDuration) {
+        safeUpdate.remainingTime = Number(updatedSettings.quarterDuration);
+        safeUpdate.gameDuration = Number(updatedSettings.quarterDuration);
       }
-      const sClock = req.body['settings.shotClock'] || req.body.settings?.shotClock || req.body.shotClock;
-      if (sClock !== undefined && !isNaN(Number(sClock))) {
-        safeUpdate.shotClockRemaining = Number(sClock);
-        safeUpdate.shotClockDuration = Number(sClock);
+      if (updatedSettings.shotClock !== undefined) {
+        safeUpdate.shotClockRemaining = Number(updatedSettings.shotClock);
+        safeUpdate.shotClockDuration = Number(updatedSettings.shotClock);
       }
-      const struct = req.body['settings.matchStructure'] || req.body.settings?.matchStructure || req.body.matchStructure;
-      if (struct === 'HALVES' && matchToUpdate.currentPeriod === 'Q1') {
+      if (updatedSettings.matchStructure === 'HALVES') {
         safeUpdate.currentPeriod = 'H1';
-      } else if (struct === 'QUARTERS' && matchToUpdate.currentPeriod === 'H1') {
+      } else if (updatedSettings.matchStructure === 'QUARTERS') {
         safeUpdate.currentPeriod = 'Q1';
+      } else if (updatedSettings.matchStructure === 'SINGLE') {
+        safeUpdate.currentPeriod = 'REGULATION';
       }
     }
 

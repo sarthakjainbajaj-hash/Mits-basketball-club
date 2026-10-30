@@ -46,7 +46,7 @@ router.post('/:id/restore-score', protect, authorize('admin'), restoreMatchScore
 
 router.route('/:id')
   .get(getMatchById)
-  .put(protect, authorize('admin'), updateMatch)
+  .put(protect, authorize('admin', 'scorer'), updateMatch)
   .delete(protect, authorize('admin'), deleteMatch);
 
 // Live Match Scoring & Clock Controls

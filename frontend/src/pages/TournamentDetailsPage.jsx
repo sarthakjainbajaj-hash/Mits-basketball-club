@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { tournamentApi } from '../api/tournamentApi';
 import { matchApi } from '../api/matchApi';
 import { teamApi } from '../api/teamApi';
+import { authApi } from '../api/authApi';
 import {
   Trophy,
   Calendar,
@@ -98,18 +99,23 @@ const TournamentDetailsPage = () => {
     venue: '',
   });
 
-  // Reschedule Match Modal State
+  // Edit Match / Reschedule Modal State
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [reschedulingMatch, setReschedulingMatch] = useState(false);
+  const [availableScorers, setAvailableScorers] = useState([]);
   const [rescheduleForm, setRescheduleForm] = useState({
     matchId: '',
     matchName: '',
+    teamA: '',
+    teamB: '',
+    matchType: '5x5',
     scheduledDate: '',
     scheduledTime: '',
     venue: '',
     matchStructure: 'QUARTERS',
     quarterDuration: 600,
     shotClock: 24,
+    assignedScorer: '',
   });
 
   useEffect(() => {
@@ -127,6 +133,14 @@ const TournamentDetailsPage = () => {
       if (tRes.status === 'fulfilled') setTournament(tRes.value?.data || null);
       if (sRes.status === 'fulfilled') setStandings(sRes.value?.data || []);
       if (teamsRes.status === 'fulfilled') setAllTeams(teamsRes.value?.data || []);
+
+      // Fetch authorized scorers for match assignment
+      if (isAdmin || isScorer) {
+        authApi.getAllUsers().then((res) => {
+          const userList = res?.data || [];
+          setAvailableScorers(userList.filter((u) => ['superadmin', 'admin', 'scorer'].includes(u.role)));
+        }).catch(() => {});
+      }
     } catch (err) {
       setToast({ message: 'Failed to load tournament: ' + err.message, type: 'error' });
     } finally {
@@ -364,7 +378,7 @@ const TournamentDetailsPage = () => {
     }
   };
 
-  // Open Reschedule Modal
+  // Open Edit Match / Reschedule Modal
   const handleOpenRescheduleModal = (m) => {
     const rawDate = m.scheduledDate ? new Date(m.scheduledDate) : new Date();
     const yyyy = rawDate.getFullYear();
@@ -375,42 +389,59 @@ const TournamentDetailsPage = () => {
     setRescheduleForm({
       matchId: m._id,
       matchName: m.matchName || '',
+      teamA: (m.teamA?._id || m.teamA || '').toString(),
+      teamB: (m.teamB?._id || m.teamB || '').toString(),
+      matchType: m.matchType || '5x5',
       scheduledDate: formattedDate,
       scheduledTime: m.scheduledTime || '18:00',
       venue: m.venue || '',
       matchStructure: m.settings?.matchStructure || (m.matchType === '5x5' ? 'QUARTERS' : 'SINGLE'),
       quarterDuration: m.settings?.quarterDuration || m.gameDuration || 600,
       shotClock: m.settings?.shotClock !== undefined ? m.settings.shotClock : (m.matchType === '5x5' ? 24 : 12),
+      assignedScorer: (m.assignedScorer?._id || m.assignedScorer || '').toString(),
     });
     setIsRescheduleModalOpen(true);
   };
 
-  // Submit Reschedule / Edit Match Timing
+  // Submit Edit Match / Reschedule
   const handleRescheduleSubmit = async (e) => {
     e.preventDefault();
     if (!rescheduleForm.matchId) return;
+
+    if (rescheduleForm.teamA && rescheduleForm.teamB && rescheduleForm.teamA === rescheduleForm.teamB) {
+      setToast({ message: 'Team A and Team B cannot be the same team', type: 'error' });
+      return;
+    }
+
     try {
       setReschedulingMatch(true);
       await matchApi.update(rescheduleForm.matchId, {
         matchName: rescheduleForm.matchName,
+        teamA: rescheduleForm.teamA || undefined,
+        teamB: rescheduleForm.teamB || undefined,
+        matchType: rescheduleForm.matchType,
         scheduledDate: rescheduleForm.scheduledDate,
         scheduledTime: rescheduleForm.scheduledTime,
         venue: rescheduleForm.venue,
-        'settings.matchStructure': rescheduleForm.matchStructure,
-        'settings.quarterDuration': Number(rescheduleForm.quarterDuration),
-        'settings.gameDuration': Number(rescheduleForm.quarterDuration),
-        'settings.shotClock': Number(rescheduleForm.shotClock),
-        'settings.numberOfQuarters': rescheduleForm.matchStructure === 'HALVES' ? 2 : 4,
+        assignedScorer: rescheduleForm.assignedScorer || null,
+        matchStructure: rescheduleForm.matchStructure,
         quarterDuration: Number(rescheduleForm.quarterDuration),
         gameDuration: Number(rescheduleForm.quarterDuration),
         shotClock: Number(rescheduleForm.shotClock),
+        settings: {
+          matchStructure: rescheduleForm.matchStructure,
+          quarterDuration: Number(rescheduleForm.quarterDuration),
+          gameDuration: Number(rescheduleForm.quarterDuration),
+          shotClock: Number(rescheduleForm.shotClock),
+          numberOfQuarters: rescheduleForm.matchStructure === 'HALVES' ? 2 : (rescheduleForm.matchType === '3x3' ? 1 : 4),
+        },
       });
-      setToast({ message: 'Match schedule & timing updated successfully!', type: 'success' });
+      setToast({ message: 'Match details & schedule updated successfully!', type: 'success' });
       setIsRescheduleModalOpen(false);
       await fetchTournamentData();
     } catch (err) {
       setToast({
-        message: 'Failed to update schedule: ' + (err.response?.data?.message || err.message),
+        message: 'Failed to update match: ' + (err.response?.data?.message || err.message),
         type: 'error',
       });
     } finally {
@@ -418,17 +449,19 @@ const TournamentDetailsPage = () => {
     }
   };
 
-  // Direct Start Match Action
+  // Direct Start Match Action -> Navigate directly to Live Scoreboard
   const handleStartMatch = async (matchId) => {
     try {
       setStartingMatchId(matchId);
-      await matchApi.start(matchId);
+      try {
+        await matchApi.start(matchId);
+      } catch (apiErr) {
+        console.warn('Match start notice, navigating directly to console:', apiErr.message);
+      }
       navigate(`/matches/${matchId}/live`);
     } catch (err) {
-      setToast({
-        message: 'Failed to start match: ' + (err.response?.data?.message || err.message),
-        type: 'error',
-      });
+      navigate(`/matches/${matchId}/live`);
+    } finally {
       setStartingMatchId(null);
     }
   };
@@ -1066,15 +1099,31 @@ const TournamentDetailsPage = () => {
                           </Link>
                         )}
 
-                        {isLive && (
+                        {/* Direct Live Scoreboard Console Button (Available for Live & Scheduled matches) */}
+                        {!isCompleted && (
                           <Link
                             to={`/matches/${m._id}/live`}
-                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-red-600/30 transition-all active:scale-95"
+                            className={`px-3.5 py-1.5 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95 ${
+                              isLive
+                                ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 shadow-red-600/30 animate-pulse'
+                                : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 shadow-orange-600/30'
+                            }`}
+                            title="Open Realtime Match Scoreboard Console"
                           >
                             <PlayCircle className="w-4 h-4" />
-                            <span>Live Scoreboard</span>
+                            <span>{isLive ? 'Live Scoreboard' : 'Open Live Score'}</span>
                           </Link>
                         )}
+
+                        {/* Public TV Spectator Link */}
+                        <Link
+                          to={`/live/${m._id}`}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-xs flex items-center gap-1 transition-all"
+                          title="Open Public Spectator / Projector View"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">TV View</span>
+                        </Link>
 
                         {isScheduled && (isAdmin || isScorer) && (
                           <>
@@ -1082,10 +1131,10 @@ const TournamentDetailsPage = () => {
                               type="button"
                               onClick={() => handleOpenRescheduleModal(m)}
                               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 font-mono text-xs flex items-center gap-1.5 border border-slate-700 transition-all active:scale-95"
-                              title="Edit Date, Timing & Court"
+                              title="Edit Match Details, Teams, Duration & Court"
                             >
-                              <Calendar className="w-3.5 h-3.5" />
-                              <span>Reschedule</span>
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Edit Match</span>
                             </button>
 
                             <Link
@@ -1100,18 +1149,13 @@ const TournamentDetailsPage = () => {
                             <button
                               onClick={() => handleStartMatch(m._id)}
                               disabled={startingMatchId === m._id}
-                              className="px-4 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-orange-600/30 transition-all active:scale-95 disabled:opacity-50"
+                              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all active:scale-95 disabled:opacity-50"
+                              title="Start Match Tip-Off"
                             >
                               <Play className="w-3.5 h-3.5 fill-current" />
                               <span>{startingMatchId === m._id ? 'Starting...' : 'Start Match'}</span>
                             </button>
                           </>
-                        )}
-
-                        {isScheduled && !isAdmin && !isScorer && (
-                          <span className="text-xs text-slate-500 font-mono italic">
-                            Upcoming match
-                          </span>
                         )}
                       </div>
                     </div>
@@ -2066,24 +2110,25 @@ const TournamentDetailsPage = () => {
         </div>
       )}
 
-      {/* Reschedule Match Modal */}
+      {/* Edit Match / Reschedule Modal */}
       {isRescheduleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsRescheduleModalOpen(false)}
-              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors"
+              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-slate-800"
+              aria-label="Close Edit Match Modal"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
-                <Calendar className="w-5 h-5" />
+                <Edit3 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-white">Reschedule Match</h3>
-                <p className="text-xs text-slate-400 font-mono">Update date, timing, venue & period duration</p>
+                <h3 className="text-xl font-black text-white">Edit Match Fixture</h3>
+                <p className="text-xs text-slate-400 font-mono">Update teams, schedule, timing, venue & official scorer</p>
               </div>
             </div>
 
@@ -2101,7 +2146,54 @@ const TournamentDetailsPage = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Team A & Team B Selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Team A (Home)
+                  </label>
+                  <select
+                    value={rescheduleForm.teamA}
+                    onChange={(e) => setRescheduleForm({ ...rescheduleForm, teamA: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="">Select Team A</option>
+                    {tournamentTeams.map((t) => {
+                      const tid = getTeamId(t);
+                      const tname = getTeamName(t);
+                      return (
+                        <option key={tid} value={tid} disabled={tid === rescheduleForm.teamB}>
+                          {tname}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Team B (Away)
+                  </label>
+                  <select
+                    value={rescheduleForm.teamB}
+                    onChange={(e) => setRescheduleForm({ ...rescheduleForm, teamB: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="">Select Team B</option>
+                    {tournamentTeams.map((t) => {
+                      const tid = getTeamId(t);
+                      const tname = getTeamName(t);
+                      return (
+                        <option key={tid} value={tid} disabled={tid === rescheduleForm.teamA}>
+                          {tname}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
                     Match Date
@@ -2129,20 +2221,43 @@ const TournamentDetailsPage = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
-                  Court / Venue
-                </label>
-                <input
-                  type="text"
-                  value={rescheduleForm.venue}
-                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, venue: e.target.value })}
-                  placeholder="e.g. Main Court, Court 2"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Court / Venue
+                  </label>
+                  <input
+                    type="text"
+                    value={rescheduleForm.venue}
+                    onChange={(e) => setRescheduleForm({ ...rescheduleForm, venue: e.target.value })}
+                    placeholder="e.g. Main Court, Court 2"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Match Format
+                  </label>
+                  <select
+                    value={rescheduleForm.matchType}
+                    onChange={(e) =>
+                      setRescheduleForm({
+                        ...rescheduleForm,
+                        matchType: e.target.value,
+                        matchStructure: e.target.value === '3x3' ? 'SINGLE' : 'HALVES',
+                        shotClock: e.target.value === '3x3' ? 12 : 24,
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="5x5">🏀 5x5 College / Full Court</option>
+                    <option value="3x3">🏀 3x3 Half Court</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
                     Match Structure
@@ -2190,38 +2305,60 @@ const TournamentDetailsPage = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
-                  Shot Clock
-                </label>
-                <select
-                  value={rescheduleForm.shotClock}
-                  onChange={(e) =>
-                    setRescheduleForm({ ...rescheduleForm, shotClock: Number(e.target.value) })
-                  }
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
-                >
-                  <option value={24}>24 Seconds (FIBA / College)</option>
-                  <option value={14}>14 Seconds</option>
-                  <option value={12}>12 Seconds (3x3)</option>
-                  <option value={0}>Disabled / OFF</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Shot Clock
+                  </label>
+                  <select
+                    value={rescheduleForm.shotClock}
+                    onChange={(e) =>
+                      setRescheduleForm({ ...rescheduleForm, shotClock: Number(e.target.value) })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value={24}>24 Seconds (FIBA / College)</option>
+                    <option value={14}>14 Seconds</option>
+                    <option value={12}>12 Seconds (3x3)</option>
+                    <option value={0}>Disabled / OFF</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-slate-400 uppercase tracking-wider mb-1.5">
+                    Assigned Official Scorer
+                  </label>
+                  <select
+                    value={rescheduleForm.assignedScorer}
+                    onChange={(e) =>
+                      setRescheduleForm({ ...rescheduleForm, assignedScorer: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="">Unassigned (Admins Only)</option>
+                    {availableScorers.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.name} ({u.role.toUpperCase()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsRescheduleModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold transition-colors"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-mono font-bold transition-colors min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={reschedulingMatch}
-                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/30 transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/30 transition-all disabled:opacity-50 min-h-[44px]"
                 >
-                  {reschedulingMatch ? 'Saving Schedule...' : 'Update Schedule'}
+                  {reschedulingMatch ? 'Saving Changes...' : 'Save Match Changes'}
                 </button>
               </div>
             </form>

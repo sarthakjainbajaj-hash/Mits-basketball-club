@@ -21,7 +21,10 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  // Super Admin has universal access across all protected areas
+  const isSuperAdmin = user?.role === 'superadmin';
+
+  if (allowedRoles && !isSuperAdmin && !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
 

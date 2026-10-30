@@ -95,7 +95,7 @@ function App() {
                 <Route
                   path="/matches/create"
                   element={
-                    <ProtectedRoute allowedRoles={['admin', 'scorer']}>
+                    <ProtectedRoute allowedRoles={['superadmin', 'admin', 'scorer']}>
                       <CreateMatchPage />
                     </ProtectedRoute>
                   }
@@ -103,7 +103,7 @@ function App() {
                 <Route
                   path="/matches/:id/setup"
                   element={
-                    <ProtectedRoute allowedRoles={['admin', 'scorer']}>
+                    <ProtectedRoute allowedRoles={['superadmin', 'admin', 'scorer']}>
                       <MatchSetupPage />
                     </ProtectedRoute>
                   }
@@ -113,7 +113,7 @@ function App() {
                 <Route
                   path="/matches/:id/live"
                   element={
-                    <ProtectedRoute allowedRoles={['admin', 'scorer', 'viewer']}>
+                    <ProtectedRoute allowedRoles={['superadmin', 'admin', 'scorer', 'viewer']}>
                       <LiveScoreboardPage />
                     </ProtectedRoute>
                   }
